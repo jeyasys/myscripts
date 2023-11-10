@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Check if the line "/* That's all, stop editing! Happy publishing. */" exists in wp-config.php
+
 if ! grep -Fxq "/* That's all, stop editing! Happy publishing. */" wp-config.php
 then
-    # If the line doesn't exist, add it before the 'require_once(ABSPATH . 'wp-settings.php');' line
-    sed -i "/require_once(ABSPATH . 'wp-settings.php');/i /* That's all, stop editing! Happy publishing. */" wp-config.php
+    # If the line doesn't exist, add a newline and then the comment before 'require_once(ABSPATH . 'wp-settings.php');'
+    sed -i "/require_once(ABSPATH . 'wp-settings.php');/i \\
+/* That's all, stop editing! Happy publishing. */" wp-config.php
 fi
-
 
 
 # Check if the disable auto update block exists
