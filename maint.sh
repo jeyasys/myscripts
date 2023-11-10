@@ -7,7 +7,8 @@ comment="/* That's all, stop editing! Happy publishing. */"
 if ! grep -Fxq "$comment" wp-config.php
 then
     # Use sed to insert the comment before 'require_once ABSPATH . 'wp-settings.php';'
-    sed -i "/require_once ABSPATH . 'wp-settings.php';/i $comment" wp-config.php
+    # This version accounts for varying amounts of whitespace
+    sed -i "/^\s*require_once\s*ABSPATH\s*\.\s*'wp-settings.php';/i $comment" wp-config.php
 fi
 
 # Check if the disable auto update block exists
