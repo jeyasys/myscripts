@@ -21,11 +21,17 @@ else
     echo "define( 'AUTOMATIC_UPDATER_DISABLED', true );" >> wp-config.php
 fi
 
-# Install and activate the LiteSpeed Cache plugin
-wp plugin install litespeed-cache --activate
+# Install the LiteSpeed Cache plugin
+wp plugin install litespeed-cache
 
-# Install and activate the Flush Opcache plugin
-wp plugin install flush-opcache --activate
+# Activate the LiteSpeed Cache plugin
+wp plugin activate litespeed-cache
+
+# Install the Flush Opcache plugin
+wp plugin install flush-opcache
+
+# Activate the Flush Opcache plugin
+wp plugin activate flush-opcache
 
 # Purge all caches in LiteSpeed
 wp litespeed-purge all
