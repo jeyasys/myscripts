@@ -6,13 +6,13 @@ comment="/* That's all, stop editing! Happy publishing. */"
 # Check if the line already exists in wp-config.php
 if ! grep -Fxq "$comment" wp-config.php
 then
-    # Use awk to find the line number where 'require_once ABSPATH . 'wp-settings.php';' occurs
-    line_num=$(awk '/require_once ABSPATH . '"'"'wp-settings.php'"'"';/{print NR}' wp-config.php)
+    # Use awk to find the last line number of a define statement
+    last_define_line=$(awk '/define\(.*\);/{line=NR} END{print line}' wp-config.php)
 
-    # If the line number is found, insert the comment two lines above it
-    if [ ! -z "$line_num" ]; then
-        let insert_line=line_num-1
-        sed -i "${insert_line}i $comment" wp-config.php
+    # If a line number is found, insert the comment after it
+    if [ ! -z "$last_define_line" ]; then
+        sed -i "${last_define_line}a \\
+$comment" wp-config.php
     else
         echo "Could not find the appropriate place to insert the comment."
     fi
