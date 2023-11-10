@@ -47,7 +47,7 @@ wp redis flush
 # Flush rewrite rules (resave permalinks)
 wp rewrite flush --hard
 
-#Set WordPress Site to Private Mode (Search engine visibility = Discourage)
+#Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
 wp option set blog_public 0
 
 # Notify before deleting the script
