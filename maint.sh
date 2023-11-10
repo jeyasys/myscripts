@@ -6,16 +6,8 @@ comment="/* That's all, stop editing! Happy publishing. */"
 # Check if the line already exists in wp-config.php
 if ! grep -Fxq "$comment" wp-config.php
 then
-    # Use awk to find the last line number of a define statement
-    last_define_line=$(awk '/define\(.*\);/{line=NR} END{print line}' wp-config.php)
-
-    # If a line number is found, insert the comment after it
-    if [ ! -z "$last_define_line" ]; then
-        sed -i "${last_define_line}a \\
-$comment" wp-config.php
-    else
-        echo "Could not find the appropriate place to insert the comment."
-    fi
+    # Use sed to insert the comment before 'require_once ABSPATH . 'wp-settings.php';'
+    sed -i "/require_once ABSPATH . 'wp-settings.php';/i $comment" wp-config.php
 fi
 
 # Check if the disable auto update block exists
