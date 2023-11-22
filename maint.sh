@@ -48,7 +48,7 @@ wp redis flush
 wp rewrite flush --hard
 
 #Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
-wp option set blog_public 0
+#wp option set blog_public 0
 
 # Notify before deleting the script
 echo "Script will be destroyed now."
