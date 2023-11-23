@@ -36,3 +36,9 @@ echo "Compressing files"
 tar -czf ../backup_$TIMESTAMP.tar.gz --exclude=$SCRIPTNAME * db_$TIMESTAMP.sql
 
 echo "Archive saved as backup_$TIMESTAMP.tar.gz in /var/www/webroot/"
+
+# Notify before deleting the script
+echo "Script will be destroyed now."
+
+# Delete the script itself
+rm -- "$0"
