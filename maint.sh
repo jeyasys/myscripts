@@ -28,24 +28,24 @@ else
 fi
 
 # Install and activate the LiteSpeed Cache plugin
-wp plugin install litespeed-cache
-wp plugin activate litespeed-cache
+wp plugin install litespeed-cache --quiet
+wp plugin activate litespeed-cache --quiet
 
 # Install and activate the Flush Opcache plugin
-wp plugin install flush-opcache
-wp plugin activate flush-opcache
+wp plugin install flush-opcache --quiet
+wp plugin activate flush-opcache --quiet
 
 # Purge all caches in LiteSpeed
-wp litespeed-purge all
+wp litespeed-purge all --quiet
 
 # Flush the WordPress object cache
-wp cache flush
+wp cache flush --quiet
 
 # If you have Redis cache installed and want to flush it as well
-wp redis flush
+wp redis flush --quiet
 
 # Flush rewrite rules (resave permalinks)
-wp rewrite flush --hard
+wp rewrite flush --hard --quiet
 
 #Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
 #wp option set blog_public 0
