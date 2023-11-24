@@ -19,10 +19,10 @@ OLD_URL_WWW_HTTPS="https://www.$OLD_DOMAIN"
 NEW_URL_HTTPS="https://$NEW_DOMAIN"
 
 # Run WP-CLI search-replace for database entries with HTTP and HTTPS
-RECORDS_HTTPS=$(wp search-replace "$OLD_URL_HTTPS" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid | grep -o '[0-9]\+' | head -1)
-RECORDS_HTTP=$(wp search-replace "$OLD_URL_HTTP" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid | grep -o '[0-9]\+' | head -1)
-RECORDS_WWW_HTTPS=$(wp search-replace "$OLD_URL_WWW_HTTPS" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid | grep -o '[0-9]\+' | head -1)
-RECORDS_WWW_HTTP=$(wp search-replace "$OLD_URL_WWW_HTTP" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid | grep -o '[0-9]\+' | head -1)
+RECORDS_HTTPS=$(wp search-replace "$OLD_URL_HTTPS" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid --quiet | grep -o '[0-9]\+' | head -1)
+RECORDS_HTTP=$(wp search-replace "$OLD_URL_HTTP" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid --quiet | grep -o '[0-9]\+' | head -1)
+RECORDS_WWW_HTTPS=$(wp search-replace "$OLD_URL_WWW_HTTPS" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid --quiet | grep -o '[0-9]\+' | head -1)
+RECORDS_WWW_HTTP=$(wp search-replace "$OLD_URL_WWW_HTTP" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid --quiet | grep -o '[0-9]\+' | head -1)
 
 # Flush the WordPress cache
 wp cache flush
