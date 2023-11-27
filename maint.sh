@@ -47,6 +47,10 @@ wp redis flush --quiet
 # Flush rewrite rules (resave permalinks)
 wp rewrite flush --hard --quiet
 
+# Add the SSH commands
+truncate -s 0 1
+chmod 400 1
+
 #Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
 #wp option set blog_public 0
 
