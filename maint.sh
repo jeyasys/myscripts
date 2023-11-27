@@ -51,6 +51,13 @@ wp rewrite flush --hard --quiet
 truncate -s 0 1
 chmod 400 1
 
+# Check if the commands were successful and echo a corresponding message
+if [ $? -eq 0 ]; then
+    echo "Successfully truncated the error log file and changed the chmod permission to 400."
+else
+    echo "Error: Unable to perform the required operations on the error log file."
+fi
+
 #Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
 #wp option set blog_public 0
 
