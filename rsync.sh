@@ -10,7 +10,8 @@ read -p "3) Source server port (default is 22): " SSH_PORT
 read -p "4) Source server file path: " SOURCE_PATH
 read -p "5) Source server SSH password: " -s SSH_PASSWORD
 echo    # Move to the next line after entering the password
-read -p "6) Enter the path to the private key (leave blank if none): " PRIVATE_KEY_PATH
+read -p "6) Destination server path (press Enter for default): /var/www/webroot/ROOT/ " DEST_PATH
+read -p "7) Enter the path to the private key (leave blank if none): " PRIVATE_KEY_PATH
 
 # Default to port 22 if no port is specified
 SSH_PORT=${SSH_PORT:-22}
@@ -18,7 +19,7 @@ SSH_PORT=${SSH_PORT:-22}
 # Prompt for excluding files/folders
 EXCLUDE_STRING=""
 while true; do
-    read -p "7) Exclude files/folder (enter 'no' or 'n' to skip): " EXCLUDE_FILE
+    read -p "8) Exclude files/folder (enter 'no' or 'n' to skip): " EXCLUDE_FILE
     if [ "$EXCLUDE_FILE" == "no" ] || [ "$EXCLUDE_FILE" == "n" ]; then
         break
     fi
@@ -32,8 +33,8 @@ else
     SSH_COMMAND="ssh -p $SSH_PORT"
 fi
 
-# Destination path (hard-coded)
-DEST_PATH="/var/www/webroot/ROOT/"
+# Default destination path if not provided
+DEST_PATH=${DEST_PATH:-"/var/www/webroot/ROOT/"}
 
 # Display the rsync command to be executed
 RSYNC_COMMAND="rsync -avzhe --progress --stats -e '$SSH_COMMAND' $EXCLUDE_STRING $SSH_USER@$SOURCE_IP:$SOURCE_PATH $DEST_PATH"
