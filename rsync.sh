@@ -14,11 +14,9 @@ read -p "1) Source server IP/hostname: " SOURCE_IP
 read -p "2) Source server SSH username: " SSH_USER
 read -p "3) Source server port (default is 22): " SSH_PORT
 read -p "4) Source server file path: " SOURCE_PATH
-echo    # Move to the next line after entering the password
-echo "   Default destination server path: $DEFAULT_DEST_PATH"
-read -p "   Enter custom destination server path (or press Enter to use default): " DEST_PATH_CUSTOM
+read -p "5) Enter custom destination server path (or press Enter to use default): " DEST_PATH_CUSTOM
 DEST_PATH=${DEST_PATH_CUSTOM:-"$DEFAULT_DEST_PATH"}
-read -p "5) Enter the path to the private key (leave blank if none): " PRIVATE_KEY_PATH
+read -p "6) Enter the path to the private key (leave blank if none): " PRIVATE_KEY_PATH
 
 # Default to port 22 if no port is specified
 SSH_PORT=${SSH_PORT:-22}
@@ -26,7 +24,7 @@ SSH_PORT=${SSH_PORT:-22}
 # Prompt for excluding files/folders
 EXCLUDE_STRING=""
 while true; do
-    read -p "6) Exclude files/folder (enter 'no' or 'n' to skip): " EXCLUDE_FILE
+    read -p "7) Exclude files/folder (enter 'no' or 'n' to skip): " EXCLUDE_FILE
     if [ "$EXCLUDE_FILE" == "no" ] || [ "$EXCLUDE_FILE" == "n" ]; then
         break
     fi
@@ -41,6 +39,6 @@ else
 fi
 
 # Display the rsync command to be executed
-RSYNC_COMMAND="rsync -avzhe --progress --stats --log-file='$LOG_FILE' -e '$SSH_COMMAND' $EXCLUDE_STRING $SSH_USER@$SOURCE_IP:$SOURCE_PATH $DEST_PATH"
+RSYNC_COMMAND="rsync -avzhe '$SSH_COMMAND' --progress --stats --log-file='$LOG_FILE' $EXCLUDE_STRING $SSH_USER@$SOURCE_IP:$SOURCE_PATH $DEST_PATH"
 
 echo "Rsync Command: $RSYNC_COMMAND"
