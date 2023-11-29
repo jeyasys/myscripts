@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Prompt for the old and new domain
+
 read -p "Enter the old domain without HTTP/HTTPS (e.g., domain.com): " OLD_DOMAIN
 read -p "Enter the new domain without HTTP/HTTPS (e.g., abc.com): " NEW_DOMAIN
 
@@ -11,7 +11,7 @@ then
     exit 1
 fi
 
-# Define protocol versions of the URLs
+
 OLD_URL_HTTP="http://$OLD_DOMAIN"
 OLD_URL_HTTPS="https://$OLD_DOMAIN"
 OLD_URL_WWW_HTTP="http://www.$OLD_DOMAIN"
@@ -24,10 +24,8 @@ RECORDS_HTTP=$(wp search-replace "$OLD_URL_HTTP" "$NEW_URL_HTTPS" --all-tables -
 RECORDS_WWW_HTTPS=$(wp search-replace "$OLD_URL_WWW_HTTPS" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid --quiet | grep -o '[0-9]\+' | head -1)
 RECORDS_WWW_HTTP=$(wp search-replace "$OLD_URL_WWW_HTTP" "$NEW_URL_HTTPS" --all-tables --skip-columns=guid --quiet | grep -o '[0-9]\+' | head -1)
 
-# Flush the WordPress cache
 wp cache flush
 
-# Output the summary in the desired format
 echo "To (New URL): $NEW_URL_HTTPS"
 echo "From (Old URLs):"
 echo
