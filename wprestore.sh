@@ -29,8 +29,8 @@ mysql -h "$db_host" -u "$db_user" -p"$db_password" "$db_name" < "$sql_backup_fil
 if [ $? -eq 0 ]; then
     echo "Database restored successfully."
 
-    echo "Removing backup file..."
-    rm -f "$backup_file"
+    echo "Removing backup files..."
+    rm -f "$backup_file" "$sql_backup_file"
 
     echo "Script will be destroyed now."
     rm -- "$0"
