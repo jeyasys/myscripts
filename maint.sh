@@ -27,6 +27,16 @@ else
     echo "Auto update was not defined, it's disabled now."
 fi
 
+
+# Check if the DISABLE_WP_CRON line exists
+if grep -q "define('DISABLE_WP_CRON', true);" wp-config.php; then
+    echo "DISABLE_WP_CRON is already set to true."
+else
+    echo "define('DISABLE_WP_CRON', true);" >> wp-config.php
+    echo "DISABLE_WP_CRON was not set, but it's set to true now."
+fi
+
+
 # Install and activate the LiteSpeed Cache plugin
 wp plugin install litespeed-cache --quiet
 wp plugin activate litespeed-cache --quiet
