@@ -14,11 +14,11 @@ else
 fi
 
 # Check if the disable auto update block exists
-if grep -q "define( 'AUTOMATIC_UPDATER_DISABLED', true );" wp-config.php; then
+if grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*true\s*);" wp-config.php; then
     echo "Auto-update is already disabled."
-elif grep -q "define( 'AUTOMATIC_UPDATER_DISABLED', false );" wp-config.php; then
+elif grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);" wp-config.php; then
     # Replace false with true
-    sed -i "s/define( 'AUTOMATIC_UPDATER_DISABLED', false );/define( 'AUTOMATIC_UPDATER_DISABLED', true );/g" wp-config.php
+    sed -i "s/define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);/define('AUTOMATIC_UPDATER_DISABLED', true);/g" wp-config.php
     echo "Auto-update was enabled, but now it's disabled."
 else
     # Add the code block if missing
@@ -27,15 +27,13 @@ else
     echo "Auto update was not defined, it's disabled now."
 fi
 
-
 # Check if the DISABLE_WP_CRON line exists
-if grep -q "define('DISABLE_WP_CRON', true);" wp-config.php; then
+if grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
     echo "DISABLE_WP_CRON is already set to true."
 else
     echo "define('DISABLE_WP_CRON', true);" >> wp-config.php
     echo "DISABLE_WP_CRON was not set, but it's set to true now."
 fi
-
 
 # Install and activate the LiteSpeed Cache plugin
 wp plugin install litespeed-cache --quiet
