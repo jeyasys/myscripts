@@ -27,13 +27,20 @@ else
     echo "Auto update was not defined, it's disabled now."
 fi
 
-# Check if the DISABLE_WP_CRON line exists
-if grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
-    echo "DISABLE_WP_CRON is already set to true."
-else
+
+
+# Check if DISABLE_WP_CRON is set to false and replace it with true
+if grep -q "define(\s*'DISABLE_WP_CRON',\s*false\s*);" wp-config.php; then
+    sed -i "s/define(\s*'DISABLE_WP_CRON',\s*false\s*);/define('DISABLE_WP_CRON', true);/g" wp-config.php
+    echo "DISABLE_WP_CRON was set to false, but it's set to true now."
+elif ! grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
+    # If DISABLE_WP_CRON is not defined at all, then add it as true
     echo "define('DISABLE_WP_CRON', true);" >> wp-config.php
     echo "DISABLE_WP_CRON was not set, but it's set to true now."
+else
+    echo "DISABLE_WP_CRON is already set to true."
 fi
+
 
 # Install and activate the LiteSpeed Cache plugin
 wp plugin install litespeed-cache --quiet
@@ -65,6 +72,16 @@ if [ $? -eq 0 ]; then
 else
     echo "Error: Unable to perform the required operations on the error log file."
 fi
+
+
+# Flush Redis cache
+redis-cli -s /var/run/redis/redis.sock FLUSHALL
+echo "All Redis caches flushed."
+
+redis-cli -s /var/run/redis/redis.sock FLUSHDB
+echo "Current Redis database flushed."
+
+echo "Redis cache flushed"
 
 #Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
 #wp option set blog_public 0
