@@ -22,6 +22,14 @@ if [[ "$confirmation" == "Y" ]]; then
 
     if [ $? -eq 0 ]; then
         echo "Search and replace completed successfully."
+
+        wp cache flush
+        if [ $? -eq 0 ]; then
+            echo "WordPress cache flushed successfully."
+        else
+            echo "Failed to flush WordPress cache."
+        fi
+
     else
         echo "There was an error performing the search and replace."
     fi
