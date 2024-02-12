@@ -20,16 +20,16 @@ echo "From (Old URLs):"
 echo
 
 echo "- $OLD_URL_HTTPS"
-wp search-replace "$OLD_URL_HTTPS" "$NEW_URL_HTTPS" --all-tables --precise --skip-columns=guid --format=count
+wp search-replace "$OLD_URL_HTTPS" "$NEW_URL_HTTPS" --all-tables --precise --format=count
 
 echo "- $OLD_URL_HTTP"
-wp search-replace "$OLD_URL_HTTP" "$NEW_URL_HTTPS" --all-tables --precise --skip-columns=guid --format=count
+wp search-replace "$OLD_URL_HTTP" "$NEW_URL_HTTPS" --all-tables --precise --format=count
 
 echo "- $OLD_URL_WWW_HTTPS"
-wp search-replace "$OLD_URL_WWW_HTTPS" "$NEW_URL_HTTPS" --all-tables --precise --skip-columns=guid --format=count
+wp search-replace "$OLD_URL_WWW_HTTPS" "$NEW_URL_HTTPS" --all-tables --precise --format=count
 
 echo "- $OLD_URL_WWW_HTTP"
-wp search-replace "$OLD_URL_WWW_HTTP" "$NEW_URL_HTTPS" --all-tables --precise --skip-columns=guid --format=count
+wp search-replace "$OLD_URL_WWW_HTTP" "$NEW_URL_HTTPS" --all-tables --precise --format=count
 
 wp cache flush
 
