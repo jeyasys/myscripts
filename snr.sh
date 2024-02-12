@@ -10,7 +10,7 @@ if [[ -z "$old_path" ]]; then
 fi
 
 echo "The script will run the following command:"
-echo "wp search-replace \"$old_path\" \"$new_path\" --all-tables"
+echo "wp search-replace \"$old_path\" \"$new_path\" --all-tables --precise"
 
 read -p "Are you sure you want to proceed? (Y/N): " confirmation
 
@@ -18,7 +18,7 @@ confirmation=${confirmation^^}
 
 if [[ "$confirmation" == "Y" ]]; then
 
-    wp search-replace "$old_path" "$new_path" --all-tables
+    wp search-replace "$old_path" "$new_path" --all-tables --precise
 
     if [ $? -eq 0 ]; then
         echo "Search and replace completed successfully."
