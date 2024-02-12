@@ -73,6 +73,15 @@ else
     echo "Error: Unable to perform the required operations on the error log file."
 fi
 
+# Empty the wp-content/uploads/bb-platform-previews/ directory
+if [ -d wp-content/uploads/bb-platform-previews/ ]; then
+    rm -rf wp-content/uploads/bb-platform-previews/*
+    echo "The directory wp-content/uploads/bb-platform-previews/ has been emptied."
+else
+    echo "The directory wp-content/uploads/bb-platform-previews/ does not exist."
+fi
+
+
 
 # Flush Redis cache
 redis-cli -s /var/run/redis/redis.sock FLUSHALL
