@@ -101,15 +101,15 @@ current_blog_public=$(wp option get blog_public)
 echo "Current site URL: $site_url"
 echo "Current status of search engine visibility (blog_public): $current_blog_public"
 
-# Scenario 1: Site URL ends with rapyd.cloud
-if [[ $site_url == *".rapyd.cloud" ]]; then
+# Scenario 1: Site URL ends with rapydapps.cloud
+if [[ $site_url == *".rapydapps.cloud" ]]; then
     if [ "$current_blog_public" -eq 0 ]; then
         echo "Search engine visibility has already been set to discourage indexing."
     else
         wp option set blog_public 0
         echo "Search engine visibility has been marked to discourage indexing (Set blog_public to 0)."
     fi
-# Scenario 2: Site URL does not end with rapyd.cloud
+# Scenario 2: Site URL does not end with rapydapps.cloud
 else
     if [ "$current_blog_public" -eq 0 ]; then
         wp option set blog_public 1
