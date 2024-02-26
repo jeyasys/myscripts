@@ -101,7 +101,7 @@ site_url=$(wp option get siteurl)
 if [[ $site_url == *".rapydapps.cloud" ]]; then
     # If it does, set blog_public to 0
     wp option set blog_public 0
-    echo "Set blog_public to 0 as the site URL ends with rapydapps.cloud."
+    echo "Set blog_public to 0 as the site URL ends with rapyd.cloud."
 else
     # If it doesn't, set blog_public to 1
     wp option set blog_public 1
