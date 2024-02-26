@@ -62,16 +62,16 @@ wp redis flush --quiet
 # Flush rewrite rules (resave permalinks)
 wp rewrite flush --hard --quiet
 
-# Add the SSH commands
-truncate -s 0 1
-chmod 400 1
+
+#truncate -s 0 1
+#chmod 400 1
 
 # Check if the commands were successful and echo a corresponding message
-if [ $? -eq 0 ]; then
-    echo "Successfully truncated the error log file and changed the chmod permission to 400."
-else
-    echo "Error: Unable to perform the required operations on the error log file."
-fi
+#if [ $? -eq 0 ]; then
+#    echo "Successfully truncated the error log file and changed the chmod permission to 400."
+#else
+#    echo "Error: Unable to perform the required operations on the error log file."
+#fi
 
 # Empty the wp-content/uploads/bb-platform-previews/ directory
 if [ -d wp-content/uploads/bb-platform-previews/ ]; then
