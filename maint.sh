@@ -95,6 +95,24 @@ echo "Redis cache flushed"
 #Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
 #wp option set blog_public 0
 
+site_url=$(wp option get siteurl)
+
+# Check if the site URL ends with rapydapps.cloud
+if [[ $site_url == *".rapydapps.cloud" ]]; then
+    # If it does, set blog_public to 0
+    wp option set blog_public 0
+    echo "Set blog_public to 0 as the site URL ends with rapydapps.cloud."
+else
+    # If it doesn't, set blog_public to 1
+    wp option set blog_public 1
+    echo "Set blog_public to 1 as the site URL does not end with rapydapps.cloud."
+fi
+
+
+if wp plugin is-installed woocommerce; then
+    echo -e "\033[1;31mWooCommerce detected. Make sure to check for the subscription module.\033[0m"
+fi
+
 # Notify before deleting the script
 echo "Script will be destroyed now."
 
