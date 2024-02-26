@@ -97,26 +97,26 @@ echo "Redis cache flushed"
 
 site_url=$(wp option get siteurl)
 current_blog_public=$(wp option get blog_public)
-wp_cli_output=""
 
+echo "Current site URL: $site_url"
+echo "Current status of search engine visibility (blog_public): $current_blog_public"
+
+# Scenario 1: Site URL ends with rapyd.cloud
 if [[ $site_url == *".rapyd.cloud" ]]; then
     if [ "$current_blog_public" -eq 0 ]; then
         echo "Search engine visibility has already been set to discourage indexing."
     else
-        wp_cli_output=$(wp option set blog_public 0 2>&1)
+        wp option set blog_public 0
         echo "Search engine visibility has been marked to discourage indexing (Set blog_public to 0)."
     fi
+# Scenario 2: Site URL does not end with rapyd.cloud
 else
-    if [ "$current_blog_public" -eq 1 ]; then
-        echo "Search engine visibility has already been restored to public indexing."
-    else
-        wp_cli_output=$(wp option set blog_public 1 2>&1)
+    if [ "$current_blog_public" -eq 0 ]; then
+        wp option set blog_public 1
         echo "Search engine visibility has been restored to public indexing (Set blog_public to 1)."
+    else
+        echo "Search engine visibility has already been restored to public indexing."
     fi
-fi
-
-if [ -n "$wp_cli_output" ]; then
-    echo "$wp_cli_output"
 fi
 
 
