@@ -96,21 +96,29 @@ echo "Redis cache flushed"
 #wp option set blog_public 0
 
 site_url=$(wp option get siteurl)
-
+current_blog_public=$(wp option get blog_public)
 wp_cli_output=""
 
-# Check if the site URL ends with rapyd.cloud
 if [[ $site_url == *".rapyd.cloud" ]]; then
-    # If it does, set blog_public to 0 and capture WP-CLI output
-    wp_cli_output=$(wp option set blog_public 0 2>&1)
-    echo "Search engine visibility has been marked to discourage indexing (Set blog_public to 0)."
+    if [ "$current_blog_public" -eq 0 ]; then
+        echo "Search engine visibility has already been set to discourage indexing."
+    else
+        wp_cli_output=$(wp option set blog_public 0 2>&1)
+        echo "Search engine visibility has been marked to discourage indexing (Set blog_public to 0)."
+    fi
 else
-    # If it doesn't, set blog_public to 1 and capture WP-CLI output
-    wp_cli_output=$(wp option set blog_public 1 2>&1)
-    echo "Search engine visibility has been restored to public indexing (Set blog_public to 1)."
+    if [ "$current_blog_public" -eq 1 ]; then
+        echo "Search engine visibility has already been restored to public indexing."
+    else
+        wp_cli_output=$(wp option set blog_public 1 2>&1)
+        echo "Search engine visibility has been restored to public indexing (Set blog_public to 1)."
+    fi
 fi
 
-echo "$wp_cli_output"
+if [ -n "$wp_cli_output" ]; then
+    echo "$wp_cli_output"
+fi
+
 
 
 if wp plugin is-installed woocommerce; then
