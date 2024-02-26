@@ -97,7 +97,9 @@ echo "Redis cache flushed"
 
 site_url=$(wp option get siteurl)
 
-# Check if the site URL ends with rapydapps.cloud
+echo "Site URL: $site_url" # Debugging: Print the site URL
+
+# Check if the site URL ends with rapyd.cloud
 if [[ $site_url == *".rapyd.cloud" ]]; then
     # If it does, set blog_public to 0
     wp option set blog_public 0
@@ -107,7 +109,6 @@ else
     wp option set blog_public 1
     echo "Set blog_public to 1 as the site URL does not end with rapyd.cloud."
 fi
-
 
 if wp plugin is-installed woocommerce; then
     echo -e "\033[1;31mWooCommerce detected. Make sure to check for the subscription module.\033[0m"
