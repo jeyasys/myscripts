@@ -121,8 +121,8 @@ fi
 
 
 
-if wp plugin is-installed woocommerce; then
-    echo -e "\033[1;31mWooCommerce detected. Make sure to check for the subscription module.\033[0m"
+if wp plugin is-installed woocommerce-subscriptions; then
+    echo -e "\033[1;31mWoo Subscription detected! Make sure to update the URL (wp option update wc_subscriptions_siteurl https://example.com-staging) and disable the WP cron.\033[0m"
 fi
 
 # Notify before deleting the script
