@@ -18,8 +18,14 @@ comment="/* That's all, stop editing! Happy publishing. */"
 pattern="require_once\(ABSPATH . 'wp-settings.php'\);"
 
 if ! grep -Fxq "$comment" wp-config.php; then
-    # Use sed with a regular expression that allows for flexible whitespace matching
-    sed -i "/\s*$pattern\s*/i $comment" wp-config.php
+    # Use awk to insert the comment before the pattern
+    awk -v pat="$pattern" -v com="$comment" '{
+        if ($0 ~ pat && !added) { 
+            print com; 
+            added=1 
+        } 
+        print 
+    }' wp-config.php > temp_file && mv temp_file wp-config.php
     echo "Happy publishing line was not there, but it's added now."
 else
     echo "Happy publishing line is already there."
