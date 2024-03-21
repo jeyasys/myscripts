@@ -1,35 +1,19 @@
 #!/bin/bash
 
 # Define the comment to be added
-#comment="/* That's all, stop editing! Happy publishing. */"
+comment="/* That's all, stop editing! Happy publishing. */"
 
 # Check if the line already exists in wp-config.php
-#if grep -Fxq "$comment" wp-config.php
-#then
-#    echo "Happy publishing line is already there."
-#else
-    # Insert the comment before 'require_once ABSPATH . 'wp-settings.php';'
-#    sed -i "/^\s*require_once\s*ABSPATH\s*\.\s*'wp-settings.php';/i $comment" wp-config.php
-#    echo "Happy publishing line was not there, but it's added now."
-#fi
-
-
-comment="/* That's all, stop editing! Happy publishing. */"
-pattern="require_once\(ABSPATH . 'wp-settings.php'\);"
-
-if ! grep -Fxq "$comment" wp-config.php; then
-    # Use awk to insert the comment before the pattern
-    awk -v pat="$pattern" -v com="$comment" '{
-        if ($0 ~ pat && !added) { 
-            print com; 
-            added=1 
-        } 
-        print 
-    }' wp-config.php > temp_file && mv temp_file wp-config.php
-    echo "Happy publishing line was not there, but it's added now."
-else
+if grep -Fxq "$comment" wp-config.php
+then
     echo "Happy publishing line is already there."
+else
+    # Insert the comment before 'require_once ABSPATH . 'wp-settings.php';'
+    sed -i "/^\s*require_once\s*ABSPATH\s*\.\s*'wp-settings.php';/i $comment" wp-config.php
+   echo "Happy publishing line was not there, but it's added now."
 fi
+
+
 
 
 # Check if the disable auto update block exists
