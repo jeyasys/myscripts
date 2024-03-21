@@ -1,17 +1,30 @@
 #!/bin/bash
 
 # Define the comment to be added
-comment="/* That's all, stop editing! Happy publishing. */"
+#comment="/* That's all, stop editing! Happy publishing. */"
 
 # Check if the line already exists in wp-config.php
-if grep -Fxq "$comment" wp-config.php
-then
-    echo "Happy publishing line is already there."
-else
+#if grep -Fxq "$comment" wp-config.php
+#then
+#    echo "Happy publishing line is already there."
+#else
     # Insert the comment before 'require_once ABSPATH . 'wp-settings.php';'
-    sed -i "/^\s*require_once\s*ABSPATH\s*\.\s*'wp-settings.php';/i $comment" wp-config.php
+#    sed -i "/^\s*require_once\s*ABSPATH\s*\.\s*'wp-settings.php';/i $comment" wp-config.php
+#    echo "Happy publishing line was not there, but it's added now."
+#fi
+
+
+comment="/* That's all, stop editing! Happy publishing. */"
+pattern="require_once\(ABSPATH . 'wp-settings.php'\);"
+
+if ! grep -Fxq "$comment" wp-config.php; then
+    # Use sed with a regular expression that allows for flexible whitespace matching
+    sed -i "/\s*$pattern\s*/i $comment" wp-config.php
     echo "Happy publishing line was not there, but it's added now."
+else
+    echo "Happy publishing line is already there."
 fi
+
 
 # Check if the disable auto update block exists
 if grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*true\s*);" wp-config.php; then
