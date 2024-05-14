@@ -16,17 +16,16 @@ fi
 
 
 
-
 # Define the lines to be added
 auto_update_line="define('AUTOMATIC_UPDATER_DISABLED', true);"
 disable_wp_cron_line="define('DISABLE_WP_CRON', true);"
 
-# Function to insert a line before the matching pattern
-insert_before() {
+# Function to insert a line after the matching pattern
+insert_after() {
     local pattern="$1"
     local insert_line="$2"
     local file="$3"
-    sed -i "/^\s*$pattern/i $insert_line" "$file"
+    sed -i "/$pattern/a $insert_line" "$file"
 }
 
 # Check if AUTOMATIC_UPDATER_DISABLED is already set to true
@@ -38,7 +37,7 @@ elif grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);" wp-config.ph
     echo "Auto-update was enabled, but now it's disabled."
 else
     # Add the line if missing
-    insert_before "require_once ABSPATH . 'wp-settings.php';" "$auto_update_line" wp-config.php
+    insert_after "Happy publishing" "$auto_update_line" wp-config.php
     echo "Auto-update was not defined, it's disabled now."
 fi
 
@@ -48,7 +47,7 @@ if grep -q "define(\s*'DISABLE_WP_CRON',\s*false\s*);" wp-config.php; then
     echo "DISABLE_WP_CRON was set to false, but it's set to true now."
 elif ! grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
     # Add the line if missing
-    insert_before "require_once ABSPATH . 'wp-settings.php';" "$disable_wp_cron_line" wp-config.php
+    insert_after "Happy publishing" "$disable_wp_cron_line" wp-config.php
     echo "DISABLE_WP_CRON was not set, but it's set to true now."
 else
     echo "DISABLE_WP_CRON is already set to true."
