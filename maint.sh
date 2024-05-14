@@ -16,7 +16,20 @@ fi
 
 
 
-# Check if the disable auto update block exists
+
+# Define the lines to be added
+auto_update_line="define('AUTOMATIC_UPDATER_DISABLED', true);"
+disable_wp_cron_line="define('DISABLE_WP_CRON', true);"
+
+# Function to insert a line before the matching pattern
+insert_before() {
+    local pattern="$1"
+    local insert_line="$2"
+    local file="$3"
+    sed -i "/^\s*$pattern/i $insert_line" "$file"
+}
+
+# Check if AUTOMATIC_UPDATER_DISABLED is already set to true
 if grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*true\s*);" wp-config.php; then
     echo "Auto-update is already disabled."
 elif grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);" wp-config.php; then
@@ -24,21 +37,18 @@ elif grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);" wp-config.ph
     sed -i "s/define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);/define('AUTOMATIC_UPDATER_DISABLED', true);/g" wp-config.php
     echo "Auto-update was enabled, but now it's disabled."
 else
-    # Add the code block if missing
-    echo "/* Disable all site auto updates  */" >> wp-config.php
-    echo "define( 'AUTOMATIC_UPDATER_DISABLED', true );" >> wp-config.php
-    echo "Auto update was not defined, it's disabled now."
+    # Add the line if missing
+    insert_before "require_once ABSPATH . 'wp-settings.php';" "$auto_update_line" wp-config.php
+    echo "Auto-update was not defined, it's disabled now."
 fi
 
-
-
-# Check if DISABLE_WP_CRON is set to false and replace it with true
+# Check if DISABLE_WP_CRON is already set to true
 if grep -q "define(\s*'DISABLE_WP_CRON',\s*false\s*);" wp-config.php; then
     sed -i "s/define(\s*'DISABLE_WP_CRON',\s*false\s*);/define('DISABLE_WP_CRON', true);/g" wp-config.php
     echo "DISABLE_WP_CRON was set to false, but it's set to true now."
 elif ! grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
-    # If DISABLE_WP_CRON is not defined at all, then add it as true
-    echo "define('DISABLE_WP_CRON', true);" >> wp-config.php
+    # Add the line if missing
+    insert_before "require_once ABSPATH . 'wp-settings.php';" "$disable_wp_cron_line" wp-config.php
     echo "DISABLE_WP_CRON was not set, but it's set to true now."
 else
     echo "DISABLE_WP_CRON is already set to true."
