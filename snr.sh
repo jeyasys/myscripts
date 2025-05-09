@@ -1,21 +1,26 @@
 #!/bin/bash
 
+# Prompt for old path
 read -p "Enter the old directory path: " old_path
 
-new_path="/var/www/webroot/ROOT"
+# Prompt for new path
+read -p "Enter the new directory path: " new_path
 
-if [[ -z "$old_path" ]]; then
-    echo "You must provide an old directory path."
+# Validate input
+if [[ -z "$old_path" || -z "$new_path" ]]; then
+    echo "You must provide both old and new directory paths."
     exit 1
 fi
 
+# Show intended command
 echo "The script will run the following command:"
 echo "wp search-replace \"$old_path\" \"$new_path\" --all-tables --precise"
 
+# Ask for confirmation
 read -p "Are you sure you want to proceed? (Y/N): " confirmation
+confirmation=${confirmation^^}  # Convert to uppercase
 
-confirmation=${confirmation^^}
-
+# Proceed if confirmed
 if [[ "$confirmation" == "Y" ]]; then
 
     wp search-replace "$old_path" "$new_path" --all-tables --precise
