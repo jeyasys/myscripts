@@ -1,6 +1,6 @@
 #!/bin/bash
 
-users=$(rapyd site list | awk -F'|' 'NF > 4 && $4 ~ /web_/ { gsub(/ /, "", $4); print $4 }' | sort -u)
+users=$(rapyd site list | awk -F'|' 'NF > 5 && $5 ~ /web_/ { gsub(/ /, "", $5); print $5 }' | sort -u)
 IFS=$'\n' read -rd '' -a user_array <<<"$users"
 
 if [ ${#user_array[@]} -eq 0 ]; then
