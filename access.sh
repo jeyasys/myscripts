@@ -1,18 +1,12 @@
 #!/bin/bash
 
-user_lines=$(rapyd site list | awk -F'|' '
-  NF > 5 && $5 ~ /web_/ {
-    slug=$2; domain=$3; webroot=$4; user=$5
-    gsub(/^ +| +$/, "", domain)
-    gsub(/^ +| +$/, "", webroot)
-    gsub(/^ +| +$/, "", user)
-    print user "|" webroot "|" domain
-  }' | sort -u)
-
-IFS=$'\n' read -rd '' -a user_array <<<"$user_lines"
+mapfile -t user_array < <(
+  rapyd site list --format json |
+  jq -r '.[] | select(.user | test("^web_")) | "\(.user | gsub(" "; ""))|\(.webroot | gsub(" "; ""))|\(.domain)"'
+)
 
 if [ ${#user_array[@]} -eq 0 ]; then
-  echo "No users found."
+  echo "No web_* users found."
   rm -- "$0"
   exit 1
 fi
