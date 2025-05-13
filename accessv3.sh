@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Ensure gum is installed
-if ! command -v gum &> /dev/null; then
-  echo "gum not found. Installing..."
+if ! command -v gum &> /dev/null || [[ "$(gum --version)" != "gum version 0.13.0" ]]; then
+  echo "Installing or upgrading gum to v0.13.0..."
   GUM_VERSION="0.13.0"
   ARCH="x86_64"
   OS="linux"
@@ -39,7 +38,7 @@ for i in "${!user_array[@]}"; do
   menu_options+=("$i|$user [$domain]")
 done
 
-selection=$(printf "%s\n" "${menu_options[@]}" | gum choose --height=15 --prompt="→ " --header="Choose the user you'd like to log in as:")
+selection=$(printf "%s\n" "${menu_options[@]}" | gum choose --height=15 --header="Choose the user you'd like to log in as:")
 
 if [[ -z "$selection" ]]; then
   echo "No selection made. Exiting."
@@ -53,5 +52,4 @@ IFS='|' read -r selected_user user_webroot user_domain <<<"${user_array[$selecte
 gum confirm "Switch to user: $selected_user and enter directory: $user_webroot?" && \
 sudo -u "$selected_user" -i bash -c "cd '$user_webroot' && exec bash"
 
-# Cleanup
 rm -- "$0"
