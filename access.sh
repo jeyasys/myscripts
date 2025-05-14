@@ -23,9 +23,9 @@ selected_index=$((selection - 1))
 if [[ $selection =~ ^[0-9]+$ ]] && (( selected_index >= 0 && selected_index < ${#user_array[@]} )); then
   IFS='|' read -r selected_user user_webroot user_domain <<<"${user_array[$selected_index]}"
   echo "Switching to user: $selected_user"
- rm -- "$0"
-  sudo -u "$selected_user" -i bash -c "cd '$user_webroot'; bash" &
-  wait
+
+  sudo -u "$selected_user" -i bash -c "cd '$user_webroot'; bash"
+  rm -- "$0"
 else
   echo "Invalid selection."
   rm -- "$0"
