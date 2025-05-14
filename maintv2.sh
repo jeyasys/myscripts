@@ -38,18 +38,18 @@ else
 fi
 
 if grep -q "^define( 'WP_REDIS_CONFIG'," wp-config.php; then
-    echo "WP_REDIS_CONFIG is already defined."
+    echo "WP_REDIS_CONFIG is already defined - replacing it with the default configuration"
     echo
 else
     echo "WP_REDIS_CONFIG is NOT defined. Adding it..."
     echo
 
-  awk '
+awk '
 BEGIN { added = 0; skipping = 0 }
-/define *\( *'\''WP_REDIS_CONFIG'\''/ { skipping = 1; next }
-/^\s*\);\s*$/ && skipping { skipping = 0; next }
+/define[[:space:]]*\([[:space:]]*'\''WP_REDIS_CONFIG'\''[[:space:]]*,?[[:space:]]*/ { skipping = 1; next }
+/^[[:space:]]*\][[:space:]]*\)[[:space:]]*;[[:space:]]*$/ && skipping { skipping = 0; next }
 skipping { next }
-/define\(.*DB_PASSWORD.*/ && !added {
+/define[[:space:]]*\([[:space:]]*'\''DB_PASSWORD'\''/ && !added {
     print $0
     print "define( '\''WP_REDIS_CONFIG'\'',"
     print "["
@@ -86,6 +86,7 @@ skipping { next }
 }
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
+
 
 
     echo "WP_REDIS_CONFIG block added correctly."
