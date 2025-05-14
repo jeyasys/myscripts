@@ -46,44 +46,51 @@ echo
 
 perl -0777 -i -pe 's/define\s*\(\s*'\''WP_REDIS_CONFIG'\''.*?\]\s*\);[\s\n]*//s' wp-config.php
 
-awk '
+redis_block=$(cat <<'EOF'
+define( 'WP_REDIS_CONFIG', 
+[
+'token' => '79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f',
+'host' => '127.0.0.1',
+'port' => 6379,
+'database' => 0,
+'prefix' => 'dbdairy',
+'client' => 'relay',
+'timeout' => 0.5,
+'read_timeout' => 0.5,
+'retry_interval' => 10,
+'retries' => 3,
+'backoff' => 'smart',
+'compression' => 'zstd', // Zstandard (level 3)
+'serializer' => 'igbinary',
+'async_flush' => true,
+'split_alloptions' => true,
+'prefetch' => false,
+'shared' => true,
+'debug' => false,
+'non_persistent_groups' => [
+'comment',
+'counts',
+'plugins',
+'themes',
+'wc_session_id',
+'learndash_reports',
+'learndash_admin_profile',
+],
+]
+  );
+EOF
+)
+
+awk -v block="$redis_block" '
 /\$table_prefix\s*=/ && !printed {
     print $0
-    print "define( '\''WP_REDIS_CONFIG'\'',"
-    print "["
-    print "'\''token'\'' => '\''79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f'\'',"
-    print "'\''host'\'' => '\''127.0.0.1'\'',"
-    print "'\''port'\'' => 6379,"
-    print "'\''database'\'' => 0,"
-    print "'\''prefix'\'' => '\''dbdairy'\'',"
-    print "'\''client'\'' => '\''relay'\'',"
-    print "'\''timeout'\'' => 0.5,"
-    print "'\''read_timeout'\'' => 0.5,"
-    print "'\''retry_interval'\'' => 10,"
-    print "'\''retries'\'' => 3,"
-    print "'\''backoff'\'' => '\''smart'\'',"
-    print "'\''compression'\'' => '\''zstd'\'',"
-    print "'\''serializer'\'' => '\''igbinary'\'',"
-    print "'\''async_flush'\'' => true,"
-    print "'\''split_alloptions'\'' => true,"
-    print "'\''prefetch'\'' => false,"
-    print "'\''shared'\'' => true,"
-    print "'\''debug'\'' => false,"
-    print "'\''non_persistent_groups'\'' => ["
-    print "    '\''comment'\'',"
-    print "    '\''counts'\'',"
-    print "    '\''plugins'\'',"
-    print "    '\''themes'\'',"
-    print "    '\''wc_session_id'\'',"
-    print "    '\''learndash_reports'\'',"
-    print "    '\''learndash_admin_profile'\''"
-    print "]"
-    print "]);"
+    print block
     printed = 1
     next
 }
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
+
 
 
 echo "WP_REDIS_CONFIG block added correctly."
