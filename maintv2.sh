@@ -46,8 +46,8 @@ else
 
 awk '
 BEGIN { added = 0; skipping = 0 }
-/define[[:space:]]*\([[:space:]]*'\''WP_REDIS_CONFIG'\''[[:space:]]*,?[[:space:]]*/ { skipping = 1; next }
-/^[[:space:]]*\][[:space:]]*\)[[:space:]]*;[[:space:]]*$/ && skipping { skipping = 0; next }
+/define[[:space:]]*\([[:space:]]*'\''WP_REDIS_CONFIG'\''/ { skipping = 1; next }
+skipping && /\][[:space:]]*\)[[:space:]]*;[[:space:]]*$/ { skipping = 0; next }
 skipping { next }
 /define[[:space:]]*\([[:space:]]*'\''DB_PASSWORD'\''/ && !added {
     print $0
@@ -86,6 +86,7 @@ skipping { next }
 }
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
+
 
 
 
