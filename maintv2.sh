@@ -44,10 +44,10 @@ else
     echo "WP_REDIS_CONFIG is NOT defined. Adding it..."
     echo
 
-   awk '
+  awk '
 BEGIN { added = 0; skipping = 0 }
-/^define\( *'\''WP_REDIS_CONFIG'\''/ { skipping = 1 }
-/^\);/ && skipping { skipping = 0; next }
+/define *\( *'\''WP_REDIS_CONFIG'\''/ { skipping = 1; next }
+/^\s*\);\s*$/ && skipping { skipping = 0; next }
 skipping { next }
 /define\(.*DB_PASSWORD.*/ && !added {
     print $0
@@ -86,6 +86,7 @@ skipping { next }
 }
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
+
 
     echo "WP_REDIS_CONFIG block added correctly."
     echo
