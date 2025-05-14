@@ -43,6 +43,7 @@ else
     echo "WP_REDIS_CONFIG is NOT defined – inserting default configuration."
 fi
 echo
+
 perl -0777 -i -pe 's/define\s*\(\s*'\''WP_REDIS_CONFIG'\''.*?\]\s*\);[\s\n]*//s' wp-config.php
 
 awk '
@@ -84,11 +85,8 @@ awk '
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
 
-
-
-    echo "WP_REDIS_CONFIG block added correctly."
-    echo
-fi
+echo "WP_REDIS_CONFIG block added correctly."
+echo
 
 cd wp-content/plugins || exit
 
