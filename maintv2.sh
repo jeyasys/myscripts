@@ -91,7 +91,7 @@ fi
 cd wp-content/plugins || exit
 
 echo "Downloading Redis Cache Pro..."
-wget -O redis-cache-pro.zip "https://objectcache.pro/plugin/redis-cache-pro.zip?token=79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f"
+wget -q -O redis-cache-pro.zip "https://objectcache.pro/plugin/redis-cache-pro.zip?token=79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f"
 echo
 
 echo "Unzipping Redis Cache Pro..."
@@ -103,34 +103,34 @@ echo
 cd ../../
 
 echo "Activating Redis Cache Pro..."
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate redis-cache-pro
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis enable --force
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate redis-cache-pro >/dev/null 2>&1
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis enable --force >/dev/null 2>&1
 echo "Redis Cache Pro installation complete."
 echo
 
 echo "Installing LiteSpeed Cache..."
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install litespeed-cache --activate
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp litespeed-option reset
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp litespeed-option import_remote "https://raw.githubusercontent.com/alekzandrgw/public-download/refs/heads/main/litespeed-cache-defaults.data"
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install litespeed-cache --activate >/dev/null 2>&1
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp litespeed-option reset >/dev/null 2>&1
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp litespeed-option import_remote "https://raw.githubusercontent.com/alekzandrgw/public-download/refs/heads/main/litespeed-cache-defaults.data" >/dev/null 2>&1
 echo "LiteSpeed Cache setup complete."
 echo
 
 echo "Installing Flush Opcache plugin..."
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install flush-opcache --quiet
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate flush-opcache --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install flush-opcache --quiet >/dev/null 2>&1
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate flush-opcache --quiet >/dev/null 2>&1
 echo "Flush Opcache plugin activated."
 echo
 
 echo "Flushing WordPress object cache..."
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp cache flush --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp cache flush --quiet >/dev/null 2>&1
 echo
 
 echo "Flushing Redis cache..."
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis flush --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis flush --quiet >/dev/null 2>&1
 echo
 
 echo "Flushing rewrite rules..."
-WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp rewrite flush --hard --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp rewrite flush --hard --quiet >/dev/null 2>&1
 echo
 
 if [ -d wp-content/uploads/bb-platform-previews/ ]; then
@@ -142,7 +142,7 @@ else
     echo
 fi
 
-if WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin is-installed woocommerce-subscriptions; then
+if WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin is-installed woocommerce-subscriptions >/dev/null 2>&1; then
     echo -e "\033[1;31mWoo Subscription detected! Consider running:\nwp option update wc_subscriptions_siteurl https://example.com-staging\033[0m"
     echo
 fi
