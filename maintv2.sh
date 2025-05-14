@@ -44,45 +44,48 @@ else
     echo "WP_REDIS_CONFIG is NOT defined. Adding it..."
     echo
 
-    awk '
-    BEGIN { added = 0 }
-    /define\(.*DB_PASSWORD.*/ && !added {
-        print $0
-        print "define( '\''WP_REDIS_CONFIG'\'',"
-        print "["
-        print "'\''token'\'' => '\''79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f'\'',"
-        print "'\''host'\'' => '\''127.0.0.1'\'',"
-        print "'\''port'\'' => 6379,"
-        print "'\''database'\'' => 0,"
-        print "'\''prefix'\'' => '\''dbdairy'\'',"
-        print "'\''client'\'' => '\''relay'\'',"
-        print "'\''timeout'\'' => 0.5,"
-        print "'\''read_timeout'\'' => 0.5,"
-        print "'\''retry_interval'\'' => 10,"
-        print "'\''retries'\'' => 3,"
-        print "'\''backoff'\'' => '\''smart'\'',"
-        print "'\''compression'\'' => '\''zstd'\'',"
-        print "'\''serializer'\'' => '\''igbinary'\'',"
-        print "'\''async_flush'\'' => true,"
-        print "'\''split_alloptions'\'' => true,"
-        print "'\''prefetch'\'' => false,"
-        print "'\''shared'\'' => true,"
-        print "'\''debug'\'' => false,"
-        print "'\''non_persistent_groups'\'' => ["
-        print "    '\''comment'\'',"
-        print "    '\''counts'\'',"
-        print "    '\''plugins'\'',"
-        print "    '\''themes'\'',"
-        print "    '\''wc_session_id'\'',"
-        print "    '\''learndash_reports'\'',"
-        print "    '\''learndash_admin_profile'\''"
-        print "]"
-        print "]);"
-        added = 1
-        next
-    }
-    { print }
-    ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
+   awk '
+BEGIN { added = 0; skipping = 0 }
+/^define\( *'\''WP_REDIS_CONFIG'\''/ { skipping = 1 }
+/^\);/ && skipping { skipping = 0; next }
+skipping { next }
+/define\(.*DB_PASSWORD.*/ && !added {
+    print $0
+    print "define( '\''WP_REDIS_CONFIG'\'',"
+    print "["
+    print "'\''token'\'' => '\''79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f'\'',"
+    print "'\''host'\'' => '\''127.0.0.1'\'',"
+    print "'\''port'\'' => 6379,"
+    print "'\''database'\'' => 0,"
+    print "'\''prefix'\'' => '\''dbdairy'\'',"
+    print "'\''client'\'' => '\''relay'\'',"
+    print "'\''timeout'\'' => 0.5,"
+    print "'\''read_timeout'\'' => 0.5,"
+    print "'\''retry_interval'\'' => 10,"
+    print "'\''retries'\'' => 3,"
+    print "'\''backoff'\'' => '\''smart'\'',"
+    print "'\''compression'\'' => '\''zstd'\'',"
+    print "'\''serializer'\'' => '\''igbinary'\'',"
+    print "'\''async_flush'\'' => true,"
+    print "'\''split_alloptions'\'' => true,"
+    print "'\''prefetch'\'' => false,"
+    print "'\''shared'\'' => true,"
+    print "'\''debug'\'' => false,"
+    print "'\''non_persistent_groups'\'' => ["
+    print "    '\''comment'\'',"
+    print "    '\''counts'\'',"
+    print "    '\''plugins'\'',"
+    print "    '\''themes'\'',"
+    print "    '\''wc_session_id'\'',"
+    print "    '\''learndash_reports'\'',"
+    print "    '\''learndash_admin_profile'\''"
+    print "]"
+    print "]);"
+    added = 1
+    next
+}
+{ print }
+' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
 
     echo "WP_REDIS_CONFIG block added correctly."
     echo
