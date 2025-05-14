@@ -47,7 +47,7 @@ echo
 perl -0777 -i -pe 's/define\s*\(\s*'\''WP_REDIS_CONFIG'\''.*?\]\s*\);[\s\n]*//s' wp-config.php
 
 awk '
-/define\(.*DB_PASSWORD.*/ && !printed {
+/\$table_prefix\s*=/ && !printed {
     print $0
     print "define( '\''WP_REDIS_CONFIG'\'',"
     print "["
@@ -84,6 +84,7 @@ awk '
 }
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
+
 
 echo "WP_REDIS_CONFIG block added correctly."
 echo
