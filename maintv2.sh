@@ -37,19 +37,16 @@ else
     echo
 fi
 
-if grep -q "^define( 'WP_REDIS_CONFIG'," wp-config.php; then
-    echo "WP_REDIS_CONFIG is already defined - replacing it with the default configuration"
-    echo
+if grep -q "WP_REDIS_CONFIG" wp-config.php; then
+    echo "WP_REDIS_CONFIG is already defined – replacing it with the default configuration."
 else
-    echo "WP_REDIS_CONFIG is NOT defined. Adding it..."
-    echo
+    echo "WP_REDIS_CONFIG is NOT defined – inserting default configuration."
+fi
+echo
+perl -0777 -i -pe 's/define\s*\(\s*'\''WP_REDIS_CONFIG'\''.*?\]\s*\);[\s\n]*//s' wp-config.php
 
 awk '
-BEGIN { added = 0; skipping = 0 }
-/define[[:space:]]*\([[:space:]]*'\''WP_REDIS_CONFIG'\''/ { skipping = 1; next }
-skipping && /\][[:space:]]*\)[[:space:]]*;/ { skipping = 0; next }
-skipping { next }
-/define[[:space:]]*\([[:space:]]*'\''DB_PASSWORD'\''/ && !added {
+/define\(.*DB_PASSWORD.*/ && !printed {
     print $0
     print "define( '\''WP_REDIS_CONFIG'\'',"
     print "["
@@ -81,12 +78,11 @@ skipping { next }
     print "    '\''learndash_admin_profile'\''"
     print "]"
     print "]);"
-    added = 1
+    printed = 1
     next
 }
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
-
 
 
 
