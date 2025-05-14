@@ -47,7 +47,7 @@ else
 awk '
 BEGIN { added = 0; skipping = 0 }
 /define[[:space:]]*\([[:space:]]*'\''WP_REDIS_CONFIG'\''/ { skipping = 1; next }
-skipping && /\][[:space:]]*\)[[:space:]]*;[[:space:]]*$/ { skipping = 0; next }
+skipping && /\][[:space:]]*\)[[:space:]]*;/ { skipping = 0; next }
 skipping { next }
 /define[[:space:]]*\([[:space:]]*'\''DB_PASSWORD'\''/ && !added {
     print $0
