@@ -11,33 +11,38 @@ table_prefix_pattern="^\s*\$table_prefix\s*="
 auto_update_line="define('AUTOMATIC_UPDATER_DISABLED', true);"
 disable_wp_cron_line="define('DISABLE_WP_CRON', true);"
 
-# Insert or update AUTO UPDATER setting
 if grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*true\s*);" wp-config.php; then
     echo "Auto-update is already disabled."
+    echo
 elif grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);" wp-config.php; then
     sed -i "s/define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);/$auto_update_line/g" wp-config.php
     echo "Auto-update was enabled, now disabled."
+    echo
 else
     insert_after_line "$table_prefix_pattern" "$auto_update_line" wp-config.php
     echo "Auto-update setting inserted after \$table_prefix."
+    echo
 fi
 
-# Insert or update DISABLE_WP_CRON setting
 if grep -q "define(\s*'DISABLE_WP_CRON',\s*false\s*);" wp-config.php; then
     sed -i "s/define(\s*'DISABLE_WP_CRON',\s*false\s*);/$disable_wp_cron_line/g" wp-config.php
     echo "DISABLE_WP_CRON set to true."
+    echo
 elif ! grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
     insert_after_line "$table_prefix_pattern" "$disable_wp_cron_line" wp-config.php
     echo "DISABLE_WP_CRON setting inserted after \$table_prefix."
+    echo
 else
     echo "DISABLE_WP_CRON already set to true."
+    echo
 fi
 
-# Check and insert WP_REDIS_CONFIG block
 if grep -q "^define( 'WP_REDIS_CONFIG'," wp-config.php; then
     echo "WP_REDIS_CONFIG is already defined."
+    echo
 else
     echo "WP_REDIS_CONFIG is NOT defined. Adding it..."
+    echo
 
     redis_config=$(cat <<'EOF'
 define( 'WP_REDIS_CONFIG',
@@ -76,59 +81,68 @@ EOF
 
     sed -i "/define(\s*'DB_PASSWORD'.*/a $redis_config" wp-config.php
     echo "WP_REDIS_CONFIG block inserted after DB_PASSWORD."
+    echo
 fi
 
-# Redis Cache Pro setup
 cd wp-content/plugins || exit
 
 echo "Downloading Redis Cache Pro..."
 wget -O redis-cache-pro.zip "https://objectcache.pro/plugin/redis-cache-pro.zip?token=79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f"
+echo
+
 echo "Unzipping Redis Cache Pro..."
 unzip redis-cache-pro.zip >/dev/null
 rm redis-cache-pro.zip
 echo "Redis Cache Pro extracted."
+echo
 
 cd ../../
 
 echo "Activating Redis Cache Pro..."
-wp plugin activate redis-cache-pro
-wp redis enable --force
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate redis-cache-pro
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis enable --force
 echo "Redis Cache Pro installation complete."
+echo
 
-# Install and configure LiteSpeed Cache
 echo "Installing LiteSpeed Cache..."
-wp plugin install litespeed-cache --activate
-wp litespeed-option reset
-wp litespeed-option import_remote "https://raw.githubusercontent.com/alekzandrgw/public-download/refs/heads/main/litespeed-cache-defaults.data"
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install litespeed-cache --activate
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp litespeed-option reset
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp litespeed-option import_remote "https://raw.githubusercontent.com/alekzandrgw/public-download/refs/heads/main/litespeed-cache-defaults.data"
 echo "LiteSpeed Cache setup complete."
+echo
 
-# Install and activate Flush Opcache
 echo "Installing Flush Opcache plugin..."
-wp plugin install flush-opcache --quiet
-wp plugin activate flush-opcache --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install flush-opcache --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate flush-opcache --quiet
 echo "Flush Opcache plugin activated."
+echo
 
-# Cache flushing
 echo "Flushing WordPress object cache..."
-wp cache flush --quiet
-echo "Flushing Redis cache..."
-wp redis flush --quiet
-echo "Flushing rewrite rules..."
-wp rewrite flush --hard --quiet
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp cache flush --quiet
+echo
 
-# Clean previews directory
+echo "Flushing Redis cache..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis flush --quiet
+echo
+
+echo "Flushing rewrite rules..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp rewrite flush --hard --quiet
+echo
+
 if [ -d wp-content/uploads/bb-platform-previews/ ]; then
     rm -rf wp-content/uploads/bb-platform-previews/*
     echo "Preview directory cleaned."
+    echo
 else
     echo "Preview directory does not exist."
+    echo
 fi
 
-# WooCommerce Subscriptions warning
-if wp plugin is-installed woocommerce-subscriptions; then
+if WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin is-installed woocommerce-subscriptions; then
     echo -e "\033[1;31mWoo Subscription detected! Consider running:\nwp option update wc_subscriptions_siteurl https://example.com-staging\033[0m"
+    echo
 fi
 
-# Final cleanup
 echo "Script will be destroyed now."
+echo
 rm -- "$0"
