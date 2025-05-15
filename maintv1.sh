@@ -40,16 +40,21 @@ else
     echo "DISABLE_WP_CRON is already set to true."
 fi
 
+expected_token="79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f"
+
 if grep -q "WP_REDIS_CONFIG" wp-config.php; then
-    if grep -q "79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f" wp-config.php; then
+    existing_token=$(awk '/WP_REDIS_CONFIG/,/\)/' wp-config.php | grep -o "'token' => '[^']*'" | cut -d"'" -f4)
+    
+    if [[ "$existing_token" == "$expected_token" ]]; then
         echo "WP_REDIS_CONFIG is already set with correct token. No replacement needed."
     else
-        echo "WP_REDIS_CONFIG is defined with a different token. Replacing it."
+        echo "WP_REDIS_CONFIG is defined with a different token ($existing_token). Replacing it."
         perl -0777 -i -pe "s/define\s*\(\s*'WP_REDIS_CONFIG'.*?\]\s*\);[\s\n]*//s" wp-config.php
     fi
 else
     echo "WP_REDIS_CONFIG is not defined. Adding it."
 fi
+
 
 if ! grep -q "79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f" wp-config.php; then
 redis_block=$(cat <<'EOF'
