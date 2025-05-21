@@ -46,14 +46,17 @@ echo
 
 perl -0777 -i -pe 's/define\s*\(\s*'\''WP_REDIS_CONFIG'\''.*?\]\s*\);[\s\n]*//s' wp-config.php
 
-redis_block=$(cat <<'EOF'
+folder_name=$(pwd | cut -d'/' -f3) 
+prefix_name=$(echo "$folder_name" | sed 's/^web/db/')
+
+redis_block=$(cat <<EOF
 define( 'WP_REDIS_CONFIG', 
 [
 'token' => '79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f',
 'host' => '127.0.0.1',
 'port' => 6379,
 'database' => 0,
-'prefix' => 'dbdairy',
+'prefix' => '$prefix_name',
 'client' => 'relay',
 'timeout' => 0.5,
 'read_timeout' => 0.5,
