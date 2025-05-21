@@ -46,8 +46,8 @@ echo
 
 perl -0777 -i -pe 's/define\s*\(\s*'\''WP_REDIS_CONFIG'\''.*?\]\s*\);[\s\n]*//s' wp-config.php
 
-folder_name=$(pwd | cut -d'/' -f3) 
-prefix_name=$(echo "$folder_name" | sed 's/^web/db/')
+dir_name=$(pwd | cut -d'/' -f3) 
+prefix_name=$(echo "$dir_name" | sed 's/^web/db/')
 
 redis_block=$(cat <<EOF
 define( 'WP_REDIS_CONFIG', 
