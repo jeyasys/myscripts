@@ -94,10 +94,27 @@ awk -v block="$redis_block" '
 { print }
 ' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
 
+
+
 echo "WP_REDIS_CONFIG block added correctly."
 echo
 
+cd wp-content/plugins || exit
+
+echo "Downloading Redis Cache Pro..."
+wget -q -O redis-cache-pro.zip "https://objectcache.pro/plugin/redis-cache-pro.zip?token=79fb1487477c0a555d76e3249e1a1d2b975715293174f50afb456171301f"
+echo
+
+echo "Unzipping Redis Cache Pro..."
+unzip -o redis-cache-pro.zip >/dev/null
+rm redis-cache-pro.zip
+echo "Redis Cache Pro extracted."
+echo
+
+cd ../../
+
 echo "Activating Redis Cache Pro..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin activate redis-cache-pro >/dev/null 2>&1
 WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis enable --force >/dev/null 2>&1
 echo "Redis Cache Pro installation complete."
 echo
