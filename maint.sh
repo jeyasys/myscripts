@@ -60,7 +60,7 @@ prefix_name=$(echo "$dir_name" | sed 's/^web/db/')
 redis_define_block=$(cat <<EOF
 define( 'WP_REDIS_SCHEME', 'tcp' );
 define( 'WP_REDIS_PORT', '6379' );
-define( 'WP_REDIS_PREFIX', '${prefix_name}_' );
+define( 'WP_REDIS_PREFIX', '${prefix_name}' );
 define( 'WP_REDIS_DATABASE', '0' );
 define( 'WP_REDIS_CLIENT', 'phpredis' );
 define( 'WP_REDIS_TIMEOUT', '0.5' );
