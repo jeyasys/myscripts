@@ -1,144 +1,120 @@
 #!/bin/bash
 
-# Define the comment to be added
-comment="/* That's all, stop editing! Happy publishing. */"
-
-# Check if the line already exists in wp-config.php
-if grep -Fxq "$comment" wp-config.php
-then
-    echo "Happy publishing line is already there."
-else
-    # Insert the comment before 'require_once ABSPATH . 'wp-settings.php';'
-    sed -i "/^\s*require_once\s*ABSPATH\s*\.\s*'wp-settings.php';/i $comment" wp-config.php
-   echo "Happy publishing line was not there, but it's added now."
-fi
-
-
-
-
-# Define the lines to be added
-auto_update_line="define('AUTOMATIC_UPDATER_DISABLED', true);"
-disable_wp_cron_line="define('DISABLE_WP_CRON', true);"
-
-# Function to insert a line after the matching pattern
-insert_after() {
+insert_after_line() {
     local pattern="$1"
     local insert_line="$2"
     local file="$3"
     sed -i "/$pattern/a $insert_line" "$file"
 }
 
-# Check if AUTOMATIC_UPDATER_DISABLED is already set to true
+table_prefix_pattern="^\s*\$table_prefix\s*="
+auto_update_line="define('AUTOMATIC_UPDATER_DISABLED', true);"
+disable_wp_cron_line="define('DISABLE_WP_CRON', true);"
+
+# 1. Auto-update line
 if grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*true\s*);" wp-config.php; then
     echo "Auto-update is already disabled."
+    echo
 elif grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);" wp-config.php; then
-    # Replace false with true
-    sed -i "s/define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);/define('AUTOMATIC_UPDATER_DISABLED', true);/g" wp-config.php
-    echo "Auto-update was enabled, but now it's disabled."
+    sed -i "s/define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*false\s*);/$auto_update_line/g" wp-config.php
+    echo "Auto-update was enabled, now disabled."
+    echo
 else
-    # Add the line if missing
-    insert_after "Happy publishing" "$auto_update_line" wp-config.php
-    echo "Auto-update was not defined, it's disabled now."
+    insert_after_line "$table_prefix_pattern" "$auto_update_line" wp-config.php
+    echo "Auto-update setting inserted after \$table_prefix."
+    echo
 fi
 
-# Check if DISABLE_WP_CRON is already set to true
+# 2. Disable wp-cron line
 if grep -q "define(\s*'DISABLE_WP_CRON',\s*false\s*);" wp-config.php; then
-    sed -i "s/define(\s*'DISABLE_WP_CRON',\s*false\s*);/define('DISABLE_WP_CRON', true);/g" wp-config.php
-    echo "DISABLE_WP_CRON was set to false, but it's set to true now."
+    sed -i "s/define(\s*'DISABLE_WP_CRON',\s*false\s*);/$disable_wp_cron_line/g" wp-config.php
+    echo "DISABLE_WP_CRON set to true."
+    echo
 elif ! grep -q "define(\s*'DISABLE_WP_CRON',\s*true\s*);" wp-config.php; then
-    # Add the line if missing
-    insert_after "Happy publishing" "$disable_wp_cron_line" wp-config.php
-    echo "DISABLE_WP_CRON was not set, but it's set to true now."
+    insert_after_line "$table_prefix_pattern" "$disable_wp_cron_line" wp-config.php
+    echo "DISABLE_WP_CRON setting inserted after \$table_prefix."
+    echo
 else
-    echo "DISABLE_WP_CRON is already set to true."
+    echo "DISABLE_WP_CRON already set to true."
+    echo
 fi
 
+# Remove any existing WP_REDIS_* defines
+perl -0777 -i -pe "
+s/define\s*\(\s*'WP_REDIS_SCHEME'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_PORT'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_PREFIX'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_DATABASE'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_CLIENT'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_TIMEOUT'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_READ_TIMEOUT'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_RETRY_INTERVAL'[^;]*;\s*//g;
+s/define\s*\(\s*'WP_REDIS_HOST'[^;]*;\s*//g;
+" wp-config.php
 
-# Install and activate the LiteSpeed Cache plugin
-wp plugin install litespeed-cache --quiet
-wp plugin activate litespeed-cache --quiet
+perl -0777 -i -pe "s/define\s*\(\s*'WP_REDIS_CONFIG'.*?\]\s*\);[\s\n]*//s" wp-config.php
 
-# Install and activate the Flush Opcache plugin
-wp plugin install flush-opcache --quiet
-wp plugin activate flush-opcache --quiet
+dir_name=$(pwd | cut -d'/' -f3)
+prefix_name=$(echo "$dir_name" | sed 's/^web/db/')
 
-# Purge all caches in LiteSpeed
-wp litespeed-purge all --quiet
+redis_define_block=$(cat <<EOF
+define( 'WP_REDIS_SCHEME', 'tcp' );
+define( 'WP_REDIS_PORT', '6379' );
+define( 'WP_REDIS_PREFIX', '${prefix_name}_' );
+define( 'WP_REDIS_DATABASE', '0' );
+define( 'WP_REDIS_CLIENT', 'phpredis' );
+define( 'WP_REDIS_TIMEOUT', '0.5' );
+define( 'WP_REDIS_READ_TIMEOUT', '0.5' );
+define( 'WP_REDIS_RETRY_INTERVAL', '10' );
+define( 'WP_REDIS_HOST', '127.0.0.1' );
+EOF
+)
 
-# Flush the WordPress object cache
-wp cache flush --quiet
+awk -v block="$redis_define_block" '
+/\$table_prefix\s*=/ && !printed {
+    print $0
+    print block
+    printed = 1
+    next
+}
+{ print }
+' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
 
-# If you have Redis cache installed and want to flush it as well
-wp redis flush --quiet
+echo "WP_REDIS_* block added correctly."
+echo
 
-# Flush rewrite rules (resave permalinks)
-wp rewrite flush --hard --quiet
+# Install and activate Redis Cache plugin
+echo "Installing Redis Cache plugin..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install redis-cache --activate --quiet >/dev/null 2>&1
+echo "Redis Cache plugin installed and activated."
+echo
 
+echo "Flushing WordPress object cache..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp cache flush --quiet >/dev/null 2>&1
+echo
 
-#truncate -s 0 1
-#chmod 400 1
+echo "Flushing Redis cache..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp redis flush --quiet >/dev/null 2>&1
+echo
 
-# Check if the commands were successful and echo a corresponding message
-#if [ $? -eq 0 ]; then
-#    echo "Successfully truncated the error log file and changed the chmod permission to 400."
-#else
-#    echo "Error: Unable to perform the required operations on the error log file."
-#fi
+echo "Flushing rewrite rules..."
+WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp rewrite flush --hard --quiet >/dev/null 2>&1
+echo
 
-# Empty the wp-content/uploads/bb-platform-previews/ directory
 if [ -d wp-content/uploads/bb-platform-previews/ ]; then
     rm -rf wp-content/uploads/bb-platform-previews/*
-    echo "The directory wp-content/uploads/bb-platform-previews/ has been emptied."
+    echo "Preview directory cleaned."
+    echo
 else
-    echo "The directory wp-content/uploads/bb-platform-previews/ does not exist."
+    echo "Preview directory does not exist."
+    echo
 fi
 
-
-
-# Flush Redis cache
-redis-cli -s /var/run/redis/redis.sock FLUSHALL
-echo "All Redis caches flushed."
-
-redis-cli -s /var/run/redis/redis.sock FLUSHDB
-echo "Current Redis database flushed."
-
-echo "Redis cache flushed"
-
-#Set WordPress Site to Private Mode (Tick "Discourage search engines from indexing this site")
-#wp option set blog_public 0
-
-site_url=$(wp option get siteurl)
-current_blog_public=$(wp option get blog_public)
-
-echo "Current site URL: $site_url"
-#echo "Current status of search engine visibility (blog_public): $current_blog_public"
-
-# Scenario 1: Site URL ends with rapydapps.cloud
-#if [[ $site_url == *".rapydapps.cloud" ]]; then
-#    if [ "$current_blog_public" -eq 0 ]; then
-#        echo "Search engine visibility has already been set to discourage indexing."
-#    else
-#        wp option set blog_public 0
-#       echo "Search engine visibility has been marked to discourage indexing (Set blog_public to 0)."
-#    fi
-# Scenario 2: Site URL does not end with rapydapps.cloud
-#else
-#    if [ "$current_blog_public" -eq 0 ]; then
- #       wp option set blog_public 1
- #       echo "Search engine visibility has been restored to public indexing (Set blog_public to 1)."
-  #  else
-#        echo "Search engine visibility has already been restored to public indexing."
-#    fi
-#fi
-
-
-
-if wp plugin is-installed woocommerce-subscriptions; then
-    echo -e "\033[1;31mWoo Subscription detected! Make sure to update the URL (wp option update wc_subscriptions_siteurl https://example.com-staging) and disable the WP cron.\033[0m"
+if WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin is-installed woocommerce-subscriptions >/dev/null 2>&1; then
+    echo -e "\033[1;31mWoo Subscription detected! Consider running:\nwp option update wc_subscriptions_siteurl https://example.com-staging\033[0m"
+    echo
 fi
 
-# Notify before deleting the script
 echo "Script will be destroyed now."
-
-# Delete the script itself
+echo
 rm -- "$0"
