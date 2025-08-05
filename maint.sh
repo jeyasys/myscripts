@@ -11,7 +11,6 @@ table_prefix_pattern="^\s*\$table_prefix\s*="
 auto_update_line="define('AUTOMATIC_UPDATER_DISABLED', true);"
 disable_wp_cron_line="define('DISABLE_WP_CRON', true);"
 
-# 1. Auto-update line
 if grep -q "define(\s*'AUTOMATIC_UPDATER_DISABLED',\s*true\s*);" wp-config.php; then
     echo "Auto-update is already disabled."
     echo
@@ -25,7 +24,6 @@ else
     echo
 fi
 
-# 2. Disable wp-cron line
 if grep -q "define(\s*'DISABLE_WP_CRON',\s*false\s*);" wp-config.php; then
     sed -i "s/define(\s*'DISABLE_WP_CRON',\s*false\s*);/$disable_wp_cron_line/g" wp-config.php
     echo "DISABLE_WP_CRON set to true."
@@ -39,51 +37,7 @@ else
     echo
 fi
 
-# Remove any existing WP_REDIS_* defines
-perl -0777 -i -pe "
-s/define\s*\(\s*'WP_REDIS_SCHEME'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_PORT'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_PREFIX'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_DATABASE'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_CLIENT'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_TIMEOUT'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_READ_TIMEOUT'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_RETRY_INTERVAL'[^;]*;\s*//g;
-s/define\s*\(\s*'WP_REDIS_HOST'[^;]*;\s*//g;
-" wp-config.php
 
-perl -0777 -i -pe "s/define\s*\(\s*'WP_REDIS_CONFIG'.*?\]\s*\);[\s\n]*//s" wp-config.php
-
-dir_name=$(pwd | cut -d'/' -f3)
-prefix_name=$(echo "$dir_name" | sed 's/^web/db/')
-
-redis_define_block=$(cat <<EOF
-define( 'WP_REDIS_SCHEME', 'tcp' );
-define( 'WP_REDIS_PORT', '6379' );
-define( 'WP_REDIS_PREFIX', '${prefix_name}' );
-define( 'WP_REDIS_DATABASE', '0' );
-define( 'WP_REDIS_CLIENT', 'phpredis' );
-define( 'WP_REDIS_TIMEOUT', '0.5' );
-define( 'WP_REDIS_READ_TIMEOUT', '0.5' );
-define( 'WP_REDIS_RETRY_INTERVAL', '10' );
-define( 'WP_REDIS_HOST', '127.0.0.1' );
-EOF
-)
-
-awk -v block="$redis_define_block" '
-/\$table_prefix\s*=/ && !printed {
-    print $0
-    print block
-    printed = 1
-    next
-}
-{ print }
-' wp-config.php > wp-config.tmp && mv wp-config.tmp wp-config.php
-
-echo "WP_REDIS_* block added correctly."
-echo
-
-# Install and activate Redis Cache plugin
 echo "Installing Redis Cache plugin..."
 WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install redis-cache --activate --quiet >/dev/null 2>&1
 echo "Redis Cache plugin installed and activated."
