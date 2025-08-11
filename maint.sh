@@ -37,6 +37,20 @@ else
     echo
 fi
 
+# Install and activate the LiteSpeed Cache plugin
+wp plugin install litespeed-cache --quiet
+wp plugin activate litespeed-cache --quiet
+
+# Install and activate the Flush Opcache plugin
+wp plugin install flush-opcache --quiet
+wp plugin activate flush-opcache --quiet
+
+# Purge all caches in LiteSpeed
+wp litespeed-purge all --quiet
+
+# Flush the WordPress object cache
+wp cache flush --quiet
+
 
 echo "Installing Redis Cache plugin..."
 WP_CLI_PHP_ARGS="-d display_errors=Off -d error_reporting=E_ERROR" wp plugin install redis-cache --activate --quiet >/dev/null 2>&1
