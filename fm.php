@@ -17,7 +17,7 @@ $HARD_DELETE = true;
 /* ─ Self-destruct ─ */
 $self = __FILE__;
 $started = @filemtime($self) ?: time();
-$expires_at = $started + 60; // 60s for testing
+$expires_at = $started + 300;
 if (time() > $expires_at) {
     @unlink($self);
     header('Content-Type: text/plain; charset=utf-8');
