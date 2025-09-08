@@ -118,12 +118,20 @@ if($act==='download'&&is_file($abs)){
 }
 if($act==='view'&&is_file($abs)){
   $c=@file_get_contents($abs); $remain=max(0,$expires_at-time());
+  $saved = isset($_GET['saved']) && $_GET['saved']==='1';
   ?>
   <!doctype html><meta charset="utf-8">
   <title><?=h($t)?></title>
   <style>body{font:14px Arial;background:#fff;color:#111;margin:0}textarea{width:100%;height:80vh;border:1px solid #ddd;border-radius:6px;padding:8px}</style>
   <div style="padding:10px;background:#f1f1f1;border-bottom:1px solid #ccc">Expires in <span id=cd></span> · <a href="<?=h($_SERVER['PHP_SELF'])?>?p=<?=urlencode(rel(dirname($abs)))?>">Back</a></div>
-  <form method=post action="?a=save&f=<?=urlencode(rel($abs))?>" style="padding:10px;max-width:1000px;margin:auto">
+ <?php if($saved): ?>
+  <div style="background:#e6ffed;border:1px solid #b7f5c8;color:#0b6b2e;
+              padding:10px;border-radius:6px;margin:10px auto;max-width:1000px;">
+    Saved successfully.
+  </div>
+<?php endif; ?>
+
+<form method=post action="?a=save&f=<?=urlencode(rel($abs))?>" style="padding:10px;max-width:1000px;margin:auto">
     <textarea name=content><?=h($c)?></textarea><br><button>Save</button>
     <a href="?a=download&f=<?=urlencode(rel($abs))?>">Download</a>
   </form>
@@ -133,7 +141,7 @@ if($act==='view'&&is_file($abs)){
 if($_SERVER['REQUEST_METHOD']==='POST'&&$act==='save'&&is_file($abs)){
     $data=(string)($_POST['content']??''); if(strlen($data)>$MAX_EDIT_BYTES) bad('Too large',413);
     if(@file_put_contents($abs,$data)===false) bad('Write failed',500);
-    header('Location:?a=view&f='.urlencode(rel($abs)));exit;
+    header('Location:?a=view&f='.urlencode(rel($abs)).'&saved=1');exit;
 }
 
 /* ─ Listing ─ */
