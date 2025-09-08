@@ -21,6 +21,15 @@ if (time() > $expires_at) {
 /* ───────────── Config / helpers ───────────── */
 $BASE  = realpath(__DIR__);
 $TOKEN = hash_hmac('sha1', (string)$started, $self); // simple anti-CSRF tied to start time
+/* Immediate self-delete */
+if (($_GET['kill'] ?? '') === '1') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['token']) && hash_equals($TOKEN, (string)$_POST['token'])) {
+        @unlink(__FILE__);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit("Uploader deleted.");
+    }
+    http_response_code(403); exit('Bad token');
+}
 $dangerous = [
   'sh','exe','bat','cmd','com','scr','pif','msi','vbs','ps1','php','phar',
   'cgi','pl','jar','apk','dll','so','iso','img','bin'
@@ -110,11 +119,19 @@ h2{margin:0 0 14px}
 .error{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:#ffbcbc}
 .small{font-size:12px;color:var(--muted)}
 .path{color:var(--muted);margin-bottom:10px}
+.btn.red{background:var(--err);border-color:var(--err)}
+.btn.red:hover{background:#c02626;border-color:#c02626}
 </style>
 
 <div class="wrap">
-  <div class="card">
-    <div class="path">Destination: <strong><?=h($BASE)?></strong></div>
+<div class="card">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="path" style="margin:0">Destination: <strong><?=h($BASE)?></strong></div>
+    <form method="post" action="?kill=1" style="margin-left:auto" onsubmit="return confirm('Delete this uploader script now?');">
+      <input type="hidden" name="token" value="<?=h($TOKEN)?>">
+      <button class="btn red" type="submit">Delete This Script</button>
+    </form>
+  </div>
 
     <!-- Global countdown banner -->
     <div id="globalTimer" class="banner">Uploader expires in <span id="cd">--:--</span></div>
