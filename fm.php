@@ -75,7 +75,15 @@ function rmdir_recursive(string $d): bool {
 
 /* ─ Simple token (no sessions) ─ */
 $TOKEN = hash_hmac('sha1',(string)$started,__FILE__);
-
+/* ─ Immediate self-delete ─ */
+if (($_GET['kill'] ?? '') === '1') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['token']) && hash_equals($TOKEN, (string)$_POST['token'])) {
+        @unlink(__FILE__);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit("File manager deleted.");
+    }
+    http_response_code(403); exit('Bad token');
+}
 /* ─ API actions (AJAX) ─ */
 if(isset($_GET['api'])){
     header('Content-Type: application/json; charset=utf-8');
@@ -168,8 +176,14 @@ input.inline{padding:6px;border:1px solid #ddd;border-radius:4px}
 a.link{color:#0d6efd;text-decoration:none}
 </style>
 
-<div class="top">Expires in <span id=cd><?=sprintf('%02d:%02d', intdiv($remain,60), $remain%60)?></span></div>
-
+<div class="top" style="display:flex;align-items:center;gap:10px">
+  <div>Expires in <span id=cd><?=sprintf('%02d:%02d', intdiv($remain,60), $remain%60)?></span></div>
+  <form method="post" action="?kill=1" style="margin-left:auto" onsubmit="return confirm('Delete this file manager script now?');">
+    <input type="hidden" name="token" value="<?=h($TOKEN)?>">
+    <button class="btn red" type="submit">Delete This Script</button>
+  </form>
+</div>
+<br><br>
 <div class="wrap">
   <div class="meta">Working dir: <?=h($BASE)?><?php if($cwdRel!==''):?> / <?=h($cwdRel)?><?php endif;?></div>
 
