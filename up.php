@@ -132,7 +132,7 @@ h2{margin:0 0 14px}
       <button class="btn red" type="submit">Delete This Script</button>
     </form>
   </div>
-
+<br><br>
     <!-- Global countdown banner -->
     <div id="globalTimer" class="banner">Uploader expires in <span id="cd">--:--</span></div>
 
