@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # snr2.sh
+
 set -Eeuo pipefail
 IFS=$'\n'
 
@@ -21,7 +22,7 @@ echo
 EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
 EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*" "$SCRIPT_NAME" )
 
-# Allowed extensions (keeps it predictable)
+# Allowed text/code extensions
 ALLOWED_EXTS=( php php5 php7 phtml inc ini conf cnf env htaccess "user.ini" txt )
 
 is_allowed() {
@@ -42,7 +43,11 @@ echo "=== DRY RUN: locating files with old path ==="
 mapfile -t CANDIDATES < <(grep -rIlF "${GREP_EXCLUDES[@]}" -- "$OLD_PATH" . || true)
 
 TARGET_FILES=()
-for f in "${CANDIDATES[@]}"; do is_allowed "$f" && TARGET_FILES+=( "$f" ); endone
+for f in "${CANDIDATES[@]}"; do
+  if is_allowed "$f"; then
+    TARGET_FILES+=( "$f" )
+  fi
+done
 
 if ((${#TARGET_FILES[@]} == 0)); then
   echo "No eligible files contain: $OLD_PATH"
@@ -86,7 +91,7 @@ if [[ "${CONFIRM:-n}" =~ ^[Yy]$ ]]; then
     # Backup (quiet)
     cp -a -- "$f" "${f}_bkp-${STAMP}" 2>/dev/null || true
     [[ -f "${f}_bkp-${STAMP}" ]] && ((BACKUP_COUNT++))
-    # Replace (exactly like your manual one-liner)
+    # Replace (exactly like manual one-liner)
     sed -i 's#'"$OLD_PATH"'#'"$NEW_PATH"'#g' -- "$f"
     after="$(count_hits "$f" || true)"
     if (( after < before )); then
