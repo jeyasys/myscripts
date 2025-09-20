@@ -2,21 +2,30 @@
 set -euo pipefail
 IFS=$'\n'
 
+# --- CONFIG ---
 OLD_PATH="/var/www/webroot/ROOT"
 STAMP="$(date +%F_%H%M%S)"
+
+# --- SCRIPT ID (so we never modify ourselves) ---
+SCRIPT_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
+SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
+
+# Grep exclusions: skip logs, SQL dumps, compressed/binary, backups, and THIS script
+EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
+EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*" "$SCRIPT_NAME" )
+
+# --- DERIVED ---
 DOCROOT="$(pwd)"
 NEW_PATH="$DOCROOT"
 
 echo "Detected docroot (pwd): $DOCROOT"
 echo
 
+# Prompt for DB name (to search only; no replacement)
 read -rp "Enter the database name to search for (e.g., wp_dbname): " DBNAME
 echo
 
-# Grep exclusions: skip noisy/irrelevant stuff
-EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
-EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*" )
-
+# Build grep exclude args
 GREP_EXCLUDES=()
 for d in "${EXCLUDE_DIRS[@]}";  do GREP_EXCLUDES+=( "--exclude-dir=$d" ); done
 for f in "${EXCLUDE_FILES[@]}";  do GREP_EXCLUDES+=( "--exclude=$f" );  done
@@ -26,7 +35,9 @@ echo "Command preview:"
 echo "grep -Irl \"$OLD_PATH\" . ${GREP_EXCLUDES[*]}"
 echo
 
+# Find files that will change (self-excluded via --exclude=$SCRIPT_NAME)
 mapfile -t TARGET_FILES < <(grep -Irl "$OLD_PATH" . "${GREP_EXCLUDES[@]}" || true)
+
 if ((${#TARGET_FILES[@]} == 0)); then
   echo "No files contain: $OLD_PATH"
 else
@@ -49,6 +60,7 @@ else
 fi
 echo
 
+# Confirm execution
 if ((${#TARGET_FILES[@]} > 0)); then
   echo "About to execute path replacement:"
   echo "For each file: cp -a FILE FILE_bkp-$STAMP && sed -i 's#${OLD_PATH}#${NEW_PATH}#g' FILE"
@@ -76,7 +88,7 @@ else
   echo
 fi
 
-echo "=== Post-check: residual occurrences of old path (excluding backups) ==="
+echo "=== Post-check: residual occurrences of old path (excluding backups & this script) ==="
 mapfile -t RESIDUAL < <(grep -Irl "$OLD_PATH" . "${GREP_EXCLUDES[@]}" || true)
 if ((${#RESIDUAL[@]} == 0)); then
   echo "No remaining occurrences of $OLD_PATH (good)."
