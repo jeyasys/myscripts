@@ -2,26 +2,21 @@
 set -euo pipefail
 IFS=$'\n'
 
-# --- CONFIG ---
 OLD_PATH="/var/www/webroot/ROOT"
 STAMP="$(date +%F_%H%M%S)"
-
-# Grep exclusions: skip logs, SQL dumps, compressed/binary, and our own backups
-EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
-EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*")
-
-# --- DERIVED ---
 DOCROOT="$(pwd)"
 NEW_PATH="$DOCROOT"
 
 echo "Detected docroot (pwd): $DOCROOT"
 echo
 
-# Prompt for DB name (to search only; no replacement)
 read -rp "Enter the database name to search for (e.g., wp_dbname): " DBNAME
 echo
 
-# Build grep exclude args
+# Grep exclusions: skip noisy/irrelevant stuff
+EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
+EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*" )
+
 GREP_EXCLUDES=()
 for d in "${EXCLUDE_DIRS[@]}";  do GREP_EXCLUDES+=( "--exclude-dir=$d" ); done
 for f in "${EXCLUDE_FILES[@]}";  do GREP_EXCLUDES+=( "--exclude=$f" );  done
@@ -31,9 +26,7 @@ echo "Command preview:"
 echo "grep -Irl \"$OLD_PATH\" . ${GREP_EXCLUDES[*]}"
 echo
 
-# Find files that will change
 mapfile -t TARGET_FILES < <(grep -Irl "$OLD_PATH" . "${GREP_EXCLUDES[@]}" || true)
-
 if ((${#TARGET_FILES[@]} == 0)); then
   echo "No files contain: $OLD_PATH"
 else
@@ -56,7 +49,6 @@ else
 fi
 echo
 
-# Confirm execution
 if ((${#TARGET_FILES[@]} > 0)); then
   echo "About to execute path replacement:"
   echo "For each file: cp -a FILE FILE_bkp-$STAMP && sed -i 's#${OLD_PATH}#${NEW_PATH}#g' FILE"
@@ -72,10 +64,8 @@ BACKUP_COUNT=0
 
 if [[ "${CONFIRM:-n}" =~ ^[Yy]$ ]]; then
   for f in "${TARGET_FILES[@]}"; do
-    # Backup
     cp -a -- "$f" "${f}_bkp-${STAMP}"
     ((BACKUP_COUNT++))
-    # Replace
     sed -i "s#${OLD_PATH}#${NEW_PATH}#g" -- "$f"
     ((CHANGED_COUNT++))
   done
@@ -101,7 +91,7 @@ if ((${#DB_HITS[@]} == 0)); then
   echo "No files contain \"$DBNAME\"."
 else
   echo "Files mentioning \"$DBNAME\":"
-  for f in "${DB_HITS[@]}"; do echo "  $f"; endone
+  for f in "${DB_HITS[@]}"; do echo "  $f"; done
 fi
 echo
 
