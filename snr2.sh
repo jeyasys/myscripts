@@ -6,13 +6,14 @@ IFS=$'\n'
 OLD_PATH="/var/www/webroot/ROOT"
 STAMP="$(date +%F_%H%M%S)"
 
-# --- SCRIPT ID (so we never modify ourselves) ---
+# --- Identify this script (to exclude & self-delete) ---
 SCRIPT_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
 SCRIPT_NAME="$(basename "$SCRIPT_PATH")"
 
-# Grep exclusions: skip logs, SQL dumps, compressed/binary, backups, and THIS script
+# Exclusions: logs, dumps, archives, our backups, and THIS script
 EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
-EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*" "$SCRIPT_NAME" )
+EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*"
+                "$SCRIPT_NAME" )
 
 # --- DERIVED ---
 DOCROOT="$(pwd)"
@@ -21,22 +22,23 @@ NEW_PATH="$DOCROOT"
 echo "Detected docroot (pwd): $DOCROOT"
 echo
 
-# Prompt for DB name (to search only; no replacement)
+# DB name (search only)
 read -rp "Enter the database name to search for (e.g., wp_dbname): " DBNAME
 echo
 
-# Build grep exclude args
+# Build grep exclude args (must appear BEFORE pattern & path)
 GREP_EXCLUDES=()
 for d in "${EXCLUDE_DIRS[@]}";  do GREP_EXCLUDES+=( "--exclude-dir=$d" ); done
 for f in "${EXCLUDE_FILES[@]}";  do GREP_EXCLUDES+=( "--exclude=$f" );  done
+EXCLUDES_STR="$(printf '%s ' "${GREP_EXCLUDES[@]}")"
 
 echo "=== DRY RUN: locating files that contain the old path ==="
 echo "Command preview:"
-echo "grep -Irl \"$OLD_PATH\" . ${GREP_EXCLUDES[*]}"
+echo "grep -Irl ${EXCLUDES_STR}-e \"$OLD_PATH\" ."
 echo
 
-# Find files that will change (self-excluded via --exclude=$SCRIPT_NAME)
-mapfile -t TARGET_FILES < <(grep -Irl "$OLD_PATH" . "${GREP_EXCLUDES[@]}" || true)
+# Options BEFORE -e pattern and path (important)
+mapfile -t TARGET_FILES < <(grep -Irl ${GREP_EXCLUDES[@]} -e "$OLD_PATH" . || true)
 
 if ((${#TARGET_FILES[@]} == 0)); then
   echo "No files contain: $OLD_PATH"
@@ -48,10 +50,10 @@ echo
 
 echo "=== DB search (no changes) — DRY RUN ==="
 echo "Command preview:"
-echo "grep -Irl \"$DBNAME\" . ${GREP_EXCLUDES[*]}"
+echo "grep -Irl ${EXCLUDES_STR}-e \"$DBNAME\" ."
 echo
 
-mapfile -t DB_HITS < <(grep -Irl "$DBNAME" . "${GREP_EXCLUDES[@]}" || true)
+mapfile -t DB_HITS < <(grep -Irl ${GREP_EXCLUDES[@]} -e "$DBNAME" . || true)
 if ((${#DB_HITS[@]} == 0)); then
   echo "No files contain database name: $DBNAME"
 else
@@ -89,7 +91,7 @@ else
 fi
 
 echo "=== Post-check: residual occurrences of old path (excluding backups & this script) ==="
-mapfile -t RESIDUAL < <(grep -Irl "$OLD_PATH" . "${GREP_EXCLUDES[@]}" || true)
+mapfile -t RESIDUAL < <(grep -Irl ${GREP_EXCLUDES[@]} -e "$OLD_PATH" . || true)
 if ((${#RESIDUAL[@]} == 0)); then
   echo "No remaining occurrences of $OLD_PATH (good)."
 else
@@ -114,3 +116,8 @@ echo "Files modified:           $CHANGED_COUNT"
 echo "Old path residual count:  ${#RESIDUAL[@]}"
 echo "DB name searched:         $DBNAME"
 echo "DB hits:                  ${#DB_HITS[@]}"
+
+# --- Self delete ---
+echo
+echo "Self-deleting script: $SCRIPT_PATH"
+rm -f -- "$SCRIPT_PATH" || true
