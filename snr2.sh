@@ -88,7 +88,7 @@ fi
 count_hits() { grep -F -o -- "$OLD_PATH" "$1" | wc -l | tr -d '[:space:]'; }
 preview_hits() {
   # print up to 3 lines containing OLD_PATH for eyeballing
-  grep -nF -- "$OLD_PATH" "$1" | head -n 3 || true
+  grep -nF -- "$OLD_PATH" "$1" | head -n 10 || true
 }
 
 CHANGED_COUNT=0
@@ -103,7 +103,7 @@ if [[ "${CONFIRM:-n}" =~ ^[Yy]$ ]]; then
     before="$(count_hits "$f" || true)"
     echo "  [BEFORE] hits: $before"
     if (( before > 0 )); then
-      echo "  [PREVIEW] lines with OLD_PATH (up to 3):"
+      echo "  [PREVIEW] lines with OLD_PATH (up to 10):"
       preview_hits "$f" | sed 's/^/    > /'
     fi
 
