@@ -6,16 +6,15 @@ declare(strict_types=1);
   - Light theme (clean, table aligned)
   - Scope: current directory only
   - Features: list, inline AJAX rename, delete, mkdir, new file, view/edit text, download
-  - Self-destruct: 5 min after filemtime(__FILE__) (with optional background auto-delete)
+  - Self-destruct: 5 min after filemtime(__FILE__) (auto-delete even without a browser revisit)
   - NEW:
       * "Extend +5 min" button (touches file, resets token & countdown)
-      * Best-effort background auto-deleter that removes the script after expiry
+      * Background auto-deleter with fallback to post-response sleeper
 */
 
 $TITLE = 'Temporary File Manager';
 $BASE  = realpath(__DIR__);
 $MAX_EDIT_BYTES = 1024 * 1024;
-$HARD_DELETE = true;
 
 /* ─ Paths & self ─ */
 $self = __FILE__;
@@ -77,37 +76,35 @@ function b64d(string $s): string {
 }
 
 /* ─ Self-destruct timing & token ─ */
-$started = @filemtime($self) ?: time();
 $expires_after = 300; // 5 minutes
+$started = @filemtime($self) ?: time();
 $expires_at = $started + $expires_after;
 
+/* Simple HMAC token bound to filemtime */
 $TOKEN = hash_hmac('sha1',(string)$started,$self);
 
-/* ─ Best-effort background auto-delete ─
-   We attempt to spawn a detached shell that sleeps until (expires_at - now),
-   then checks the fresh filemtime and deletes only if truly expired.
-   This avoids deleting immediately after an extension (touch).
-*/
-function can_exec(): bool {
+/* ─ Capability checks ─ */
+function func_disabled(string $fn): bool {
+    if (!function_exists($fn)) return true;
     $disabled = array_map('trim', explode(',', (string)ini_get('disable_functions')));
-    $need = ['proc_open','escapeshellarg'];
-    foreach ($need as $fn) {
-        if (!function_exists($fn) || in_array($fn, $disabled, true)) return false;
-    }
-    return strtoupper((string)ini_get('safe_mode')) !== '1';
+    return in_array($fn, $disabled, true);
+}
+function can_detach_process(): bool {
+    if (ini_get('safe_mode')) return false; // legacy, but be safe
+    if (func_disabled('proc_open') || func_disabled('proc_close') || func_disabled('escapeshellarg')) return false;
+    return true;
 }
 
-function spawn_auto_delete(string $file, int $seconds, int $grace=2): void {
+/* ─ Detached background deleter ─ */
+function spawn_auto_delete(string $file, int $seconds, int $grace=2): bool {
     if ($seconds < 0) $seconds = 0;
-    if (!can_exec()) return;
+    if (!can_detach_process()) return false;
 
     $php    = PHP_BINARY ?: 'php';
     $fileQ  = escapeshellarg($file);
     $sleepS = (string)max(0, $seconds);
     $graceS = (string)max(0, $grace);
 
-    // The inline PHP re-checks expiry based on current filemtime (honours extensions).
-    // We add a tiny grace delay to reduce race with concurrent touches.
     $inline = <<<PHPCMD
 @\\sleep($sleepS + $graceS);
 \$f=$fileQ;
@@ -117,29 +114,63 @@ if(\$s && (time() > \$s + 300)) { @\\unlink(\$f); }
 PHPCMD;
 
     $cmd = escapeshellarg($php).' -r '.escapeshellarg($inline);
-    // Run detached with sh so it doesn't block the request
     $sh = 'nohup sh -c '.escapeshellarg($cmd).' >/dev/null 2>&1 &';
 
-    // Use proc_open for best portability
-    @proc_close(@proc_open($sh, [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']], $pipes));
+    $proc = @proc_open($sh, [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']], $pipes);
+    if (is_resource($proc)) { @proc_close($proc); return true; }
+    return false;
 }
 
-// Try to keep a background deleter running.
-// We re-spawn on each hit if remaining time increased (e.g., after an extend).
+/* ─ Inline post-response sleeper fallback ─
+   Sends the HTTP response, then keeps the PHP worker alive to sleep and delete.
+   This guarantees deletion even on locked-down hosts, at the cost of one worker.
+*/
+function start_inline_sleeper(string $file, int $seconds): void {
+    if ($seconds < 0) $seconds = 0;
+
+    // Finish the response cleanly so the browser is not held
+    if (!headers_sent()) {
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Connection: close');
+    }
+    // Flush all output buffers
+    while (ob_get_level() > 0) { @ob_end_flush(); }
+    @flush();
+
+    // If available, tell FPM/FastCGI we’re done with the client
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();
+    }
+
+    @ignore_user_abort(true);
+    @set_time_limit($seconds + 10);
+
+    @sleep($seconds + 2);
+    @clearstatcache(true, $file);
+    $s = @filemtime($file);
+    if ($s && (time() > $s + 300)) { @unlink($file); }
+}
+
+/* ─ Ensure an auto-delete is scheduled for this request ─ */
 $remain_now = max(0, $expires_at - time());
-spawn_auto_delete($self, $remain_now);
+$detached_ok = spawn_auto_delete($self, $remain_now);
+/* If detached spawner is blocked, we rely on inline sleeper.
+   We'll start it at the very end of the request, after rendering. */
 
 /* ─ Immediate self-delete endpoint ─ */
 if (($_GET['kill'] ?? '') === '1') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['token']) && hash_equals($TOKEN, (string)$_POST['token'])) {
         @unlink($self);
         header('Content-Type: text/plain; charset=utf-8');
-        exit("File manager deleted.");
+        echo "File manager deleted.";
+        // No need for sleeper here; we’re gone.
+        exit;
     }
     http_response_code(403); exit('Bad token');
 }
 
-/* ─ Expiry gate (serves message and deletes if hit post-expiry) ─ */
+/* ─ Expiry gate (hard stop if already expired) ─ */
 if (time() > $expires_at) {
     @unlink($self);
     header('Content-Type: text/plain; charset=utf-8');
@@ -183,8 +214,10 @@ if(isset($_GET['api'])){
             // Touch file to "now" to reset the 5-minute window and rotate token
             $now = time();
             if (!@touch($self, $now)) throw new Exception('fail');
-            // Spawn a fresh auto-deleter for the new window
+
+            // Re-spawn background deleter for the new window; fallback handled at end of request
             spawn_auto_delete($self, 300);
+
             $newToken = hash_hmac('sha1', (string)$now, $self);
             echo json_encode(['ok'=>true,'remain'=>300,'token'=>$newToken]);
 
@@ -194,6 +227,8 @@ if(isset($_GET['api'])){
         http_response_code(400);
         echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
     }
+    // Start inline sleeper if no detached process was possible
+    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
     exit;
 }
 
@@ -208,8 +243,11 @@ if($act==='download'&&is_file($abs)){
     header('Content-Type: application/octet-stream');
     header('Content-Length: '.filesize($abs));
     header('Content-Disposition: attachment; filename="'.basename($abs).'"');
-    readfile($abs); exit;
+    readfile($abs);
+    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+    exit;
 }
+
 if($act==='view'&&is_file($abs)){
   $c=@file_get_contents($abs); $remain=max(0,$expires_at-time());
   $saved = isset($_GET['saved']) && $_GET['saved']==='1';
@@ -270,12 +308,18 @@ if($act==='view'&&is_file($abs)){
       }catch(e){ alert('Extend failed'); }
     }
   </script>
-  <?php exit;
+  <?php
+  // Begin inline sleeper if needed
+  if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+  exit;
 }
+
 if($_SERVER['REQUEST_METHOD']==='POST'&&$act==='save'&&is_file($abs)){
     $data=(string)($_POST['content']??''); if(strlen($data)>$MAX_EDIT_BYTES) bad('Too large',413);
     if(@file_put_contents($abs,$data)===false) bad('Write failed',500);
-    header('Location:?a=view&enc=1&f='.h(b64e(rel($abs))).'&saved=1');exit;
+    header('Location:?a=view&enc=1&f='.rawurlencode(b64e(rel($abs))).'&saved=1');
+    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+    exit;
 }
 
 /* ─ Listing ─ */
@@ -418,3 +462,6 @@ async function extendExpiry(){
   }
 }
 </script>
+<?php
+// Start inline sleeper at the very end if we couldn't detach a background process
+if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
