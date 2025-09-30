@@ -76,7 +76,7 @@ function b64d(string $s): string {
 }
 
 /* ─ Self-destruct timing & token ─ */
-$expires_after = 300; // 5 minutes
+$expires_after = 1500; // 5 minutes
 $started = @filemtime($self) ?: time();
 $expires_at = $started + $expires_after;
 
