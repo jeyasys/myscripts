@@ -263,7 +263,7 @@ if($act==='view'&&is_file($abs)){
   </style>
   <div style="padding:10px;background:#f1f1f1;border-bottom:1px solid #ccc;display:flex;align-items:center;gap:10px">
     <div>Expires in <span id=cd></span></div>
-    <button class="btn blue" type="button" onclick="extendExpiry()">Extend +5 min</button>
+    <button class="btn blue" type="button" onclick="extendExpiry()">Extend +25 min</button>
     <div style="margin-left:auto"><a href="<?=h($_SERVER['PHP_SELF'])?>?p=<?=urlencode(rel(dirname($abs)))?>">Back</a></div>
   </div>
 
