@@ -110,7 +110,7 @@ function spawn_auto_delete(string $file, int $seconds, int $grace=2): bool {
 \$f=$fileQ;
 @\\clearstatcache(true,\$f);
 \$s=@\\filemtime(\$f);
-if(\$s && (time() > \$s + 300)) { @\\unlink(\$f); }
+if(\$s && (time() > \$s + 1500)) { @\\unlink(\$f); }
 PHPCMD;
 
     $cmd = escapeshellarg($php).' -r '.escapeshellarg($inline);
@@ -149,7 +149,7 @@ function start_inline_sleeper(string $file, int $seconds): void {
     @sleep($seconds + 2);
     @clearstatcache(true, $file);
     $s = @filemtime($file);
-    if ($s && (time() > $s + 300)) { @unlink($file); }
+    if ($s && (time() > $s + 1500)) { @unlink($file); }
 }
 
 /* ─ Ensure an auto-delete is scheduled for this request ─ */
@@ -216,10 +216,10 @@ if(isset($_GET['api'])){
             if (!@touch($self, $now)) throw new Exception('fail');
 
             // Re-spawn background deleter for the new window; fallback handled at end of request
-            spawn_auto_delete($self, 300);
+            spawn_auto_delete($self, 1500);
 
             $newToken = hash_hmac('sha1', (string)$now, $self);
-            echo json_encode(['ok'=>true,'remain'=>300,'token'=>$newToken]);
+            echo json_encode(['ok'=>true,'remain'=>1500,'token'=>$newToken]);
 
         }else throw new Exception('bad');
 
@@ -228,7 +228,7 @@ if(isset($_GET['api'])){
         echo json_encode(['ok'=>false,'error'=>$e->getMessage()]);
     }
     // Start inline sleeper if no detached process was possible
-    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 1500) - time()));
     exit;
 }
 
@@ -244,7 +244,7 @@ if($act==='download'&&is_file($abs)){
     header('Content-Length: '.filesize($abs));
     header('Content-Disposition: attachment; filename="'.basename($abs).'"');
     readfile($abs);
-    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 1500) - time()));
     exit;
 }
 
@@ -310,7 +310,7 @@ if($act==='view'&&is_file($abs)){
   </script>
   <?php
   // Begin inline sleeper if needed
-  if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+  if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 1500) - time()));
   exit;
 }
 
@@ -318,7 +318,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'&&$act==='save'&&is_file($abs)){
     $data=(string)($_POST['content']??''); if(strlen($data)>$MAX_EDIT_BYTES) bad('Too large',413);
     if(@file_put_contents($abs,$data)===false) bad('Write failed',500);
     header('Location:?a=view&enc=1&f='.rawurlencode(b64e(rel($abs))).'&saved=1');
-    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+    if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 1500) - time()));
     exit;
 }
 
@@ -453,7 +453,7 @@ async function extendExpiry(){
     const j = await api('extend');
     if (j && j.ok) {
       TOKEN = j.token;
-      r = j.remain; // reset the countdown to 300 seconds
+      r = j.remain; // reset the countdown to 1500 seconds
     } else {
       alert('Extend failed');
     }
@@ -464,4 +464,4 @@ async function extendExpiry(){
 </script>
 <?php
 // Start inline sleeper at the very end if we couldn't detach a background process
-if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 300) - time()));
+if (!$detached_ok) start_inline_sleeper($self, max(0, ($started + 1500) - time()));
