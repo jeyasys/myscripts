@@ -89,11 +89,9 @@ echo
 read -rp "Proceed to run the command now? (y/N): " confirm
 confirm=${confirm:-N}
 
+# Run the command or abort
 if [[ "$confirm" =~ ^([yY][eE][sS]|[yY])$ ]]; then
   echo "Running restore..."
-  # Use eval to allow input redirection; ensure variables are quoted properly
-  # Warning printed for security
-  echo "Warning: password is passed on the command line. This may be visible to system users in process lists while the command runs."
   eval "mysql -h '${DB_HOST}' -u '${DB_USER}' --password='${DB_PASS}' '${DB_NAME}' -f < \"${SQLFILE}\""
   exit_code=$?
   if [[ $exit_code -eq 0 ]]; then
@@ -103,5 +101,10 @@ if [[ "$confirm" =~ ^([yY][eE][sS]|[yY])$ ]]; then
   fi
 else
   echo "Aborted by user. No changes made."
-  exit 0
 fi
+
+# Self-delete after finishing (success or abort)
+SCRIPT_PATH="$(realpath "$0")"
+echo "Deleting script: $SCRIPT_PATH"
+rm -f "$SCRIPT_PATH"
+
