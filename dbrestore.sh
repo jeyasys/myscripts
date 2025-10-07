@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Self-delete helper (runs on any exit) ---
+SELF_PATH="$(realpath "$0")"
+cleanup_self() {
+  echo "Deleting script: $SELF_PATH"
+  rm -f "$SELF_PATH" || true
+}
+trap cleanup_self EXIT
+trap cleanup_self INT TERM
+
+
 WP_CONF="wp-config.php"
 
 # Check wp-config.php exists in current dir
@@ -102,9 +112,4 @@ if [[ "$confirm" =~ ^([yY][eE][sS]|[yY])$ ]]; then
 else
   echo "Aborted by user. No changes made."
 fi
-
-# Self-delete after finishing (success or abort)
-SCRIPT_PATH="$(realpath "$0")"
-echo "Deleting script: $SCRIPT_PATH"
-rm -f "$SCRIPT_PATH"
 
