@@ -33,12 +33,12 @@ echo
 EXCLUDE_DIRS=( ".git" "node_modules" "vendor" "wp-content/uploads/wc-logs" )
 EXCLUDE_FILES=( "*.log" "*.sql" "*.gz" "*.zip" "*.tar" "*.tar.gz" "*.tgz" "*_bkp-*" "$SCRIPT_NAME" )
 
-ALLOWED_EXTS=( php php5 php7 phtml inc ini conf cnf env htaccess "user.ini" txt )
+ALLOWED_EXTS=( php html htaccess )
 
 is_allowed() {
   local f="$1" base ext
   base="$(basename -- "$f")"
-  [[ "$base" == ".htaccess" || "$base" == ".user.ini" || "$base" == "user.ini" ]] && return 0
+  [[ "$base" == ".htaccess" ]] && return 0
   ext="${base##*.}"
   for e in "${ALLOWED_EXTS[@]}"; do [[ "$ext" == "$e" ]] && return 0; done
   return 1
