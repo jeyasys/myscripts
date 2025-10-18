@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # WordPress files backup with excludes, space check, progress, safe writes
-# No log file unless an error occurs. Self-delete only on success or explicit abort.
+# No log file unless an error occurs. Self-delete on success or on space-abort.
 set -Eeuo pipefail
 
 # ---------- Styling ----------
@@ -34,28 +34,28 @@ cleanup_partial_on_err() {
 }
 trap cleanup_partial_on_err INT TERM ERR
 
-# ---------- Excludes (matches your manager’s defaults) ----------
-read -r -d '' EXCLUDES <<'EOF'
---exclude=ROOT/wp-content/ai1wm-backups
---exclude=ROOT/wp-content/backups
---exclude=ROOT/wp-content/backups-dup-pro
---exclude=ROOT/wp-content/updraft
---exclude=ROOT/wp-content/uploads/backup-*
---exclude=ROOT/wp-content/uploads/backwpup-*
---exclude=ROOT/wp-content/cache
---exclude=ROOT/wp-content/uploads/cache
---exclude=ROOT/wp-content/w3tc-cache
---exclude=ROOT/wp-content/wp-rocket-cache
---exclude=ROOT/wp-content/litespeed
---exclude=ROOT/wp-content/debug.log
---exclude=ROOT/wp-content/error_log
---exclude=ROOT/wp-content/ewww
---exclude=ROOT/wp-content/smush-webp
---exclude=ROOT/wp-content/uploads/wp-file-manager-pro/fm_backup
---exclude=ROOT/wp-config-backup.php
---exclude=ROOT/error_log
---exclude=*.log
-EOF
+# ---------- Excludes (ARRAY; this fixes the previous exit bug) ----------
+EXCLUDES=(
+  --exclude=ROOT/wp-content/ai1wm-backups
+  --exclude=ROOT/wp-content/backups
+  --exclude=ROOT/wp-content/backups-dup-pro
+  --exclude=ROOT/wp-content/updraft
+  --exclude=ROOT/wp-content/uploads/backup-*
+  --exclude=ROOT/wp-content/uploads/backwpup-*
+  --exclude=ROOT/wp-content/cache
+  --exclude=ROOT/wp-content/uploads/cache
+  --exclude=ROOT/wp-content/w3tc-cache
+  --exclude=ROOT/wp-content/wp-rocket-cache
+  --exclude=ROOT/wp-content/litespeed
+  --exclude=ROOT/wp-content/debug.log
+  --exclude=ROOT/wp-content/error_log
+  --exclude=ROOT/wp-content/ewww
+  --exclude=ROOT/wp-content/smush-webp
+  --exclude=ROOT/wp-content/uploads/wp-file-manager-pro/fm_backup
+  --exclude=ROOT/wp-config-backup.php
+  --exclude=ROOT/error_log
+  --exclude=*.log
+)
 
 # ---------- Space analysis ----------
 WP_BYTES=$(du -sb ROOT 2>/dev/null | awk '{print $1}')
@@ -67,15 +67,13 @@ info "=== Disk Space Analysis ==="
 echo "WordPress dir size:           $(numfmt --to=iec "$WP_BYTES")"
 echo "Required (with 10% buffer):   $(numfmt --to=iec "$REQUIRED_BYTES")"
 echo "Available on target FS:       $(numfmt --to=iec "$AVAIL_BYTES")"
-# Rough estimate (informational) for gzip compression ~60%
-EST_GZ_BYTES=$(( (WP_BYTES * 60) / 100 ))
+EST_GZ_BYTES=$(( (WP_BYTES * 60) / 100 ))  # rough gzip estimate ~60%
 echo "Estimated .tar.gz size (~60%): $(numfmt --to=iec "$EST_GZ_BYTES")"
 echo
 
 # If insufficient space, abort cleanly and self-delete
 if (( AVAIL_BYTES < REQUIRED_BYTES )); then
   err "Insufficient free space to safely create archive. Aborting."
-  # Persist error details if any exist
   if [[ -s "$TMP_ERR" ]]; then
     mv -f "$TMP_ERR" backup_files.err.log 2>/dev/null || true
     echo "Error details saved to $(pwd)/backup_files.err.log"
@@ -91,7 +89,7 @@ log "Creating archive at $(pwd)/$OUT_FINAL (gzip)…"
 if command -v pv >/dev/null 2>&1; then
   info "Using pv for progress…"
   set +e
-  tar -cpf - --acls --xattrs --numeric-owner ${EXCLUDES} ROOT 2>>"$TMP_ERR" \
+  tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
     | pv -s "$WP_BYTES" \
     | gzip -9 > "$OUT_TMP"
   TAR_STATUS=${PIPESTATUS[0]}
@@ -100,7 +98,7 @@ if command -v pv >/dev/null 2>&1; then
 else
   warn "pv not found; showing basic progress (bytes written)…"
   set +e
-  ( tar -cpf - --acls --xattrs --numeric-owner ${EXCLUDES} ROOT 2>>"$TMP_ERR" \
+  ( tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
     | gzip -9 > "$OUT_TMP" ) &
   PIPE_PID=$!
   while kill -0 "$PIPE_PID" 2>/dev/null; do
@@ -126,7 +124,7 @@ if [[ ${TAR_STATUS:-0} -ne 0 || ${GZ_STATUS:-0} -ne 0 || ! -s "$OUT_TMP" ]]; the
   else
     cleanup_tmp
   fi
-  exit 1  # (self-delete NOT triggered on generic failure; keeps script for rerun)
+  exit 1  # keep script for rerun/debug
 fi
 
 mv -f "$OUT_TMP" "$OUT_FINAL"
