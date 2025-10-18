@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # WordPress DB backup with charset detection, space check, prompt, progress, safe writes
-# PLUS optional post-processing:
-#  - Collation fix: utf8mb4_0900_ai_ci -> utf8mb4_unicode_ci (if present)
-#  - DEFINER fix:   DEFINER=`user`@`host` -> DEFINER=CURRENT_USER
-#                   SQL SECURITY DEFINER  -> SQL SECURITY INVOKER
+# Conditional post-processing (with confirmation):
+#  - Collation fix: utf8mb4_0900_ai_ci -> utf8mb4_unicode_ci
+#  - DEFINER fix:   DEFINER=`user`@`host` -> CURRENT_USER; SQL SECURITY DEFINER -> INVOKER
 set -Eeuo pipefail
 
-# ============ Styling ============
+# ---------- Self-delete on exit ----------
+SELF_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
+cleanup_self() { echo "Deleting script: $SELF_PATH"; rm -f -- "$SELF_PATH" >/dev/null 2>&1 || true; }
+trap cleanup_self EXIT
+
+# ---------- Styling ----------
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[$(date +'%F %T')]${NC} $*"; }
 info() { echo -e "${BLUE}[INFO]${NC} $*"; }
@@ -22,12 +26,12 @@ WP="${WP:-wp}"  # override via WP=/path/to/wp if needed
 ERR_LOG="backup_db.err.log"
 : > "$ERR_LOG"
 
-# -- 1) Charset via WP-CLI (as requested)
+# ---------- 1) Charset via WP-CLI ----------
 DB_CHARSET="$($WP eval 'global $wpdb; echo $wpdb->charset . PHP_EOL;' --allow-root --skip-plugins --skip-themes 2>>"$ERR_LOG" | tr -d '\r\n' || true)"
 DB_CHARSET="${DB_CHARSET:-utf8mb4}"
 info "Detected DB charset: ${DB_CHARSET}"
 
-# -- 2) Parse DB creds from wp-config.php
+# ---------- 2) Parse DB creds ----------
 extract_define() {
   local key="$1"
   grep -E "define\(\s*['\"]${key}['\"]" wp-config.php \
@@ -47,16 +51,16 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 OUT_FINAL="${DB_NAME}_${STAMP}.sql"
 OUT_TMP="${OUT_FINAL}.tmp.$$"
 
-# Clean up temp on error/interrupt
-cleanup() {
+# Partial preservation on error/interrupt
+cleanup_partials() {
   if [[ -f "$OUT_TMP" ]]; then
     warn "Leaving partial dump: ${OUT_FINAL}.partial.$(date +%s)"
     mv -f "$OUT_TMP" "${OUT_FINAL}.partial.$(date +%s)" 2>/dev/null || rm -f "$OUT_TMP" || true
   fi
 }
-trap cleanup INT TERM ERR
+trap cleanup_partials INT TERM ERR
 
-# -- 3) Host/port/socket handling
+# ---------- 3) Host/port/socket ----------
 HOST_OPT=""; PORT_OPT=""; SOCKET_OPT=""
 if [[ "$DB_HOST" == /* ]]; then
   SOCKET_OPT="--socket=$DB_HOST"
@@ -74,12 +78,12 @@ else
   HOST_OPT="--host=$DB_HOST"
 fi
 
-# -- 4) Optional capability flags
+# ---------- 4) Optional capability flags ----------
 GTID_ARG=""; COLSTAT_ARG=""
 mysqldump --help 2>/dev/null | grep -q -- "--set-gtid-purged"   && GTID_ARG="--set-gtid-purged=OFF"
 mysqldump --help 2>/dev/null | grep -q -- "--column-statistics" && COLSTAT_ARG="--column-statistics=0"
 
-# -- 5) EXACT base args you want (array preserved)
+# ---------- 5) EXACT base args ----------
 BASE_ARGS=(
   --user="$DB_USER"
   --default-character-set="${DB_CHARSET:-utf8mb4}"
@@ -102,7 +106,7 @@ BASE_ARGS=(
 [[ -n "$GTID_ARG"    ]] && BASE_ARGS+=("$GTID_ARG")
 [[ -n "$COLSTAT_ARG" ]] && BASE_ARGS+=("$COLSTAT_ARG")
 
-# -- 6) Space analysis: estimate DB size (bytes)
+# ---------- 6) Space analysis ----------
 EST_DB_BYTES="$($WP db size --allow-root --skip-plugins --skip-themes --quiet --size_format=b 2>>"$ERR_LOG" | grep -Eo '^[0-9]+' || true)"
 EST_DB_BYTES="${EST_DB_BYTES:-2147483648}"  # default 2 GiB if unknown
 REQUIRED_BYTES=$(( (EST_DB_BYTES * 110) / 100 )) # +10% buffer
@@ -125,7 +129,7 @@ else
   [[ ! $ans =~ ^[Yy]$ ]] && { warn "Aborted by user."; exit 0; }
 fi
 
-# -- 7) Dump with progress and safe write
+# ---------- 7) Dump with progress & safe write ----------
 log "Exporting database to $OUT_FINAL …"
 if command -v pv >/dev/null 2>&1; then
   set +e
@@ -150,7 +154,7 @@ else
   echo
 fi
 
-# Fallback retry (without routines/events) if failed or empty
+# Retry without routines/events if needed
 if [[ $DUMP_STATUS -ne 0 || ! -s "$OUT_TMP" ]]; then
   warn "Initial dump failed. Retrying without routines/events…"
   SAFE_ARGS=(
@@ -201,11 +205,9 @@ if [[ $DUMP_STATUS -ne 0 || ! -s "$OUT_TMP" ]]; then
   exit 1
 fi
 
-# ---- 8) CONDITIONAL FIXES (collation / DEFINER) ----
+# ---------- 8) Conditional fixes (with confirmation) ----------
 NEED_COLLATION_FIX="no"
 NEED_DEFINER_FIX="no"
-
-# Quick existence checks (stop at first match)
 grep -m1 -q 'utf8mb4_0900_ai_ci' "$OUT_TMP" && NEED_COLLATION_FIX="yes" || true
 grep -m1 -E -q 'DEFINER=`[^`]+`@`[^`]+`|SQL SECURITY DEFINER' "$OUT_TMP" && NEED_DEFINER_FIX="yes" || true
 
@@ -228,11 +230,11 @@ if [[ "$NEED_COLLATION_FIX" == "yes" || "$NEED_DEFINER_FIX" == "yes" ]]; then
 
   if [[ "$fix_ans" =~ ^[Yy]$ ]]; then
     OUT_PROC="${OUT_FINAL}.proc.tmp.$$"
+    # ensure any failure still keeps partial processed output
     trap '[[ -f "$OUT_PROC" ]] && mv -f "$OUT_PROC" "${OUT_FINAL}.partial.$(date +%s).proc" 2>/dev/null || true' INT TERM ERR
 
-    info "Applying fixes (streaming to processed file)…"
+    info "Applying fixes (streaming)…"
     if command -v pv >/dev/null 2>&1; then
-      # Build sed program dynamically
       SED_PROG=()
       [[ "$NEED_DEFINER_FIX" == "yes" ]] && SED_PROG+=(-e 's/DEFINER=`[^`]+`@`[^`]+`/DEFINER=CURRENT_USER/g' -e 's/SQL SECURITY DEFINER/SQL SECURITY INVOKER/g')
       [[ "$NEED_COLLATION_FIX" == "yes" ]] && SED_PROG+=(-e 's/utf8mb4_0900_ai_ci/utf8mb4_unicode_ci/g')
