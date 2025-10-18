@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# WordPress DB backup with charset detection, space check, prompt, progress, safe writes
+# WordPress DB backup: charset detect, strict space check (no prompt), progress, safe writes
 # Conditional post-processing (with confirmation):
-#  - Collation fix: utf8mb4_0900_ai_ci -> utf8mb4_unicode_ci
-#  - DEFINER fix:   DEFINER=`user`@`host` -> CURRENT_USER; SQL SECURITY DEFINER -> INVOKER
+#  - utf8mb4_0900_ai_ci -> utf8mb4_unicode_ci  (only if present)
+#  - DEFINER=`user`@`host` -> CURRENT_USER and SQL SECURITY DEFINER -> INVOKER (only if present)
 set -Eeuo pipefail
 
 # ---------- Self-delete on exit ----------
@@ -17,17 +17,21 @@ info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*"; }
 
+# ---------- Preconditions ----------
 if [[ ! -f ./wp-config.php ]]; then
   err "Run this from /var/www/webroot/ROOT (wp-config.php not found)."
   exit 1
 fi
 
 WP="${WP:-wp}"  # override via WP=/path/to/wp if needed
-ERR_LOG="backup_db.err.log"
-: > "$ERR_LOG"
+
+# Temp error capture; we only persist it if an error happens.
+TMP_ERR="$(mktemp -t dbdump_err.XXXXXX)"
+cleanup_tmp_err() { rm -f "$TMP_ERR" >/dev/null 2>&1 || true; }
+# don't trap here; we'll delete it on success paths.
 
 # ---------- 1) Charset via WP-CLI ----------
-DB_CHARSET="$($WP eval 'global $wpdb; echo $wpdb->charset . PHP_EOL;' --allow-root --skip-plugins --skip-themes 2>>"$ERR_LOG" | tr -d '\r\n' || true)"
+DB_CHARSET="$($WP eval 'global $wpdb; echo $wpdb->charset . PHP_EOL;' --allow-root --skip-plugins --skip-themes 2>>"$TMP_ERR" | tr -d '\r\n' || true)"
 DB_CHARSET="${DB_CHARSET:-utf8mb4}"
 info "Detected DB charset: ${DB_CHARSET}"
 
@@ -44,6 +48,8 @@ DB_PASSWORD=$(extract_define "DB_PASSWORD")
 DB_HOST=$(extract_define "DB_HOST")
 if [[ -z "${DB_NAME:-}" || -z "${DB_USER:-}" || -z "${DB_HOST:-}" ]]; then
   err "Could not read DB credentials from wp-config.php"
+  mv -f "$TMP_ERR" backup_db.err.log 2>/dev/null || true
+  echo "Error details saved to $(pwd)/backup_db.err.log"
   exit 1
 fi
 
@@ -51,7 +57,7 @@ STAMP=$(date +%Y%m%d_%H%M%S)
 OUT_FINAL="${DB_NAME}_${STAMP}.sql"
 OUT_TMP="${OUT_FINAL}.tmp.$$"
 
-# Partial preservation on error/interrupt
+# Keep partial on failure/interruption (so you can inspect), but never claim final name.
 cleanup_partials() {
   if [[ -f "$OUT_TMP" ]]; then
     warn "Leaving partial dump: ${OUT_FINAL}.partial.$(date +%s)"
@@ -106,9 +112,10 @@ BASE_ARGS=(
 [[ -n "$GTID_ARG"    ]] && BASE_ARGS+=("$GTID_ARG")
 [[ -n "$COLSTAT_ARG" ]] && BASE_ARGS+=("$COLSTAT_ARG")
 
-# ---------- 6) Space analysis ----------
-EST_DB_BYTES="$($WP db size --allow-root --skip-plugins --skip-themes --quiet --size_format=b 2>>"$ERR_LOG" | grep -Eo '^[0-9]+' || true)"
-EST_DB_BYTES="${EST_DB_BYTES:-2147483648}"  # default 2 GiB if unknown
+# ---------- 6) Space analysis (strict, no prompt) ----------
+# Estimate DB size (bytes); default 2 GiB if unknown
+EST_DB_BYTES="$($WP db size --allow-root --skip-plugins --skip-themes --quiet --size_format=b 2>>"$TMP_ERR" | grep -Eo '^[0-9]+' || true)"
+EST_DB_BYTES="${EST_DB_BYTES:-2147483648}"
 REQUIRED_BYTES=$(( (EST_DB_BYTES * 110) / 100 )) # +10% buffer
 AVAIL_BYTES=$(df -B1 . | awk 'NR==2{print $4}')
 
@@ -120,27 +127,25 @@ echo "Available on target FS:       $(numfmt --to=iec $AVAIL_BYTES)"
 echo
 
 if (( AVAIL_BYTES < REQUIRED_BYTES )); then
-  warn "Available space may be insufficient for a full dump."
-  read -r -p "Proceed anyway? (y/N): " ans
-  [[ ! $ans =~ ^[Yy]$ ]] && { warn "Aborted by user."; exit 0; }
-else
-  read -r -p "Proceed with DB backup? (Y/n): " ans
-  ans=${ans:-Y}
-  [[ ! $ans =~ ^[Yy]$ ]] && { warn "Aborted by user."; exit 0; }
+  err "Insufficient space for DB backup. Aborting."
+  mv -f "$TMP_ERR" backup_db.err.log 2>/dev/null || true
+  echo "Details (if any) saved to $(pwd)/backup_db.err.log"
+  exit 1
 fi
+# Enough space -> proceed immediately (no prompt)
 
 # ---------- 7) Dump with progress & safe write ----------
 log "Exporting database to $OUT_FINAL …"
 if command -v pv >/dev/null 2>&1; then
   set +e
-  MYSQL_PWD="$DB_PASSWORD" mysqldump "${BASE_ARGS[@]}" "$DB_NAME" 2>>"$ERR_LOG" \
+  MYSQL_PWD="$DB_PASSWORD" mysqldump "${BASE_ARGS[@]}" "$DB_NAME" 2>>"$TMP_ERR" \
     | pv -s "$EST_DB_BYTES" > "$OUT_TMP"
   DUMP_STATUS=${PIPESTATUS[0]}
   set -e
 else
   warn "pv not found; showing basic progress (bytes written)…"
   set +e
-  ( MYSQL_PWD="$DB_PASSWORD" mysqldump "${BASE_ARGS[@]}" "$DB_NAME" > "$OUT_TMP" 2>>"$ERR_LOG" ) &
+  ( MYSQL_PWD="$DB_PASSWORD" mysqldump "${BASE_ARGS[@]}" "$DB_NAME" > "$OUT_TMP" 2>>"$TMP_ERR" ) &
   PID=$!
   while kill -0 "$PID" 2>/dev/null; do
     if [[ -f "$OUT_TMP" ]]; then
@@ -179,13 +184,13 @@ if [[ $DUMP_STATUS -ne 0 || ! -s "$OUT_TMP" ]]; then
   : > "$OUT_TMP"
   if command -v pv >/dev/null 2>&1; then
     set +e
-    MYSQL_PWD="$DB_PASSWORD" mysqldump "${SAFE_ARGS[@]}" "$DB_NAME" 2>>"$ERR_LOG" \
+    MYSQL_PWD="$DB_PASSWORD" mysqldump "${SAFE_ARGS[@]}" "$DB_NAME" 2>>"$TMP_ERR" \
       | pv -s "$EST_DB_BYTES" > "$OUT_TMP"
     DUMP_STATUS=${PIPESTATUS[0]}
     set -e
   else
     set +e
-    ( MYSQL_PWD="$DB_PASSWORD" mysqldump "${SAFE_ARGS[@]}" "$DB_NAME" > "$OUT_TMP" 2>>"$ERR_LOG" ) &
+    ( MYSQL_PWD="$DB_PASSWORD" mysqldump "${SAFE_ARGS[@]}" "$DB_NAME" > "$OUT_TMP" 2>>"$TMP_ERR" ) &
     PID=$!
     while kill -0 "$PID" 2>/dev/null; do
       if [[ -f "$OUT_TMP" ]]; then
@@ -201,7 +206,9 @@ if [[ $DUMP_STATUS -ne 0 || ! -s "$OUT_TMP" ]]; then
 fi
 
 if [[ $DUMP_STATUS -ne 0 || ! -s "$OUT_TMP" ]]; then
-  err "Database export failed. See $ERR_LOG"
+  err "Database export failed."
+  mv -f "$TMP_ERR" backup_db.err.log 2>/dev/null || true
+  echo "Error details saved to $(pwd)/backup_db.err.log"
   exit 1
 fi
 
@@ -241,12 +248,11 @@ if [[ "$NEED_COLLATION_FIX" == "yes" || "$NEED_DEFINER_FIX" == "yes" ]]; then
 
       set +e
       pv -s "$(stat -c%s "$OUT_TMP")" "$OUT_TMP" \
-        | sed -E "${SED_PROG[@]}" > "$OUT_PROC"
+        | sed -E "${SED_PROG[@]}" > "$OUT_PROC" 2>>"$TMP_ERR"
       PROC_STATUS=${PIPESTATUS[1]}
       set -e
     else
-      warn "pv not found; showing basic progress (bytes written)…"
-      SED_PROG_FILE="$(mktemp -p . sedprog.XXXXXX)"
+      SED_PROG_FILE="$(mktemp -t sedprog.XXXXXX)"
       {
         [[ "$NEED_DEFINER_FIX" == "yes" ]] && echo 's/DEFINER=`[^`]+`@`[^`]+`/DEFINER=CURRENT_USER/g'
         [[ "$NEED_DEFINER_FIX" == "yes" ]] && echo 's/SQL SECURITY DEFINER/SQL SECURITY INVOKER/g'
@@ -254,7 +260,7 @@ if [[ "$NEED_COLLATION_FIX" == "yes" || "$NEED_DEFINER_FIX" == "yes" ]]; then
       } > "$SED_PROG_FILE"
 
       set +e
-      ( sed -E -f "$SED_PROG_FILE" "$OUT_TMP" > "$OUT_PROC" ) &
+      ( sed -E -f "$SED_PROG_FILE" "$OUT_TMP" > "$OUT_PROC" 2>>"$TMP_ERR" ) &
       PIDP=$!
       while kill -0 "$PIDP" 2>/dev/null; do
         if [[ -f "$OUT_PROC" ]]; then
@@ -265,12 +271,14 @@ if [[ "$NEED_COLLATION_FIX" == "yes" || "$NEED_DEFINER_FIX" == "yes" ]]; then
       done
       wait "$PIDP"; PROC_STATUS=$?
       set -e
-      echo
       rm -f "$SED_PROG_FILE" || true
+      echo
     fi
 
     if [[ ${PROC_STATUS:-0} -ne 0 || ! -s "$OUT_PROC" ]]; then
-      err "Post-processing failed. Keeping original dump as partial. See $ERR_LOG"
+      err "Post-processing failed."
+      mv -f "$TMP_ERR" backup_db.err.log 2>/dev/null || true
+      echo "Error details saved to $(pwd)/backup_db.err.log"
       exit 1
     fi
 
@@ -284,6 +292,14 @@ else
   mv -f "$OUT_TMP" "$OUT_FINAL"
 fi
 
+# Success → remove temp err capture if empty; else persist as warning
+if [[ -s "$TMP_ERR" ]]; then
+  # Only persist if a *real* error happened earlier; by now success, so drop it
+  rm -f "$TMP_ERR" >/dev/null 2>&1 || true
+else
+  rm -f "$TMP_ERR" >/dev/null 2>&1 || true
+fi
+
 SIZE=$(stat -c%s "$OUT_FINAL" 2>/dev/null || echo 0)
 SHA=$(sha256sum "$OUT_FINAL" | awk '{print $1}')
 
@@ -294,4 +310,3 @@ echo "  Output: $(pwd)/$OUT_FINAL"
 echo "  Size:   $(numfmt --to=iec $SIZE)"
 echo "  Charset used: ${DB_CHARSET}"
 echo "  SHA256: $SHA"
-echo "  Log:    $(pwd)/$ERR_LOG"
