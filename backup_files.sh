@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
-# WordPress files backup (gzip), excludes, progress, safe write, quick verification.
+# WordPress files backup (gzip), excludes, progress, safe write
+# Quick verification by default; add --verify-deep for manifest comparison.
 # No log file unless there’s an error. Self-delete on success or space-abort.
 set -Eeuo pipefail
+
+# ---------- CLI ----------
+DEEP_VERIFY=0
+if [[ "${1:-}" == "--verify-deep" ]]; then
+  DEEP_VERIFY=1
+fi
 
 # ---------- Styling ----------
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -33,7 +40,7 @@ cleanup_partial_on_err() {
 }
 trap cleanup_partial_on_err INT TERM ERR
 
-# ---------- Excludes ----------
+# ---------- Excludes (kept identical to your manager’s set, rooted at ROOT/) ----------
 EXCLUDES=(
   --exclude=ROOT/wp-content/ai1wm-backups
   --exclude=ROOT/wp-content/backups
@@ -55,20 +62,6 @@ EXCLUDES=(
   --exclude=ROOT/error_log
   --exclude=*.log
 )
-
-# Build a corresponding find(1) prune expression for verification counting
-# (we only exclude directories/prefix-es we know; glob file patterns are handled with -path)
-build_find_prunes() {
-  local args=()
-  local pat
-  for pat in "${EXCLUDES[@]}"; do
-    pat="${pat#--exclude=}"
-    # find expects paths without leading ./, our tree is ROOT/...
-    # Use -path 'pattern' -prune -o for both dirs and file globs.
-    args+=( -path "$pat" -prune -o )
-  done
-  printf '%s\n' "${args[@]}"
-}
 
 # ---------- Space analysis ----------
 WP_BYTES=$(du -sb ROOT 2>/dev/null | awk '{print $1}')
@@ -107,7 +100,6 @@ if command -v pv >/dev/null 2>&1; then
   tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
     | pv -s "$WP_BYTES" \
     | gzip -6 --rsyncable > "$OUT_TMP"
-  # Capture statuses immediately (guard for set -u)
   _ps=("${PIPESTATUS[@]:-}")
   TAR_STATUS="${_ps[0]:-1}"
   GZ_STATUS="${_ps[2]:-1}"
@@ -147,7 +139,7 @@ fi
 
 mv -f "$OUT_TMP" "$OUT_FINAL"
 
-# ---------- Quick verification ----------
+# ---------- Quick verification (fast) ----------
 # 1) gzip integrity test
 if ! gzip -t "$OUT_FINAL" 2>>"$TMP_ERR"; then
   err "gzip integrity test FAILED for $OUT_FINAL"
@@ -162,33 +154,99 @@ if ! tar -tzf "$OUT_FINAL" > /dev/null 2>>"$TMP_ERR"; then
   exit 1
 fi
 
-# 3) Count source files (excluding patterns) vs files in archive
-#    (files only; dirs not counted)
-mapfile -t PRUNES < <(build_find_prunes)
-# shellcheck disable=SC2068
-SRC_FILE_COUNT=$(find ROOT \( ${PRUNES[@]} -false \) -type f -print 2>/dev/null | wc -l | tr -d ' ')
+# 3) Count source files (files only; dirs not counted) using the SAME exclude semantics
+SRC_FILE_COUNT=$(find ROOT \
+  -path 'ROOT/wp-content/ai1wm-backups' -prune -o \
+  -path 'ROOT/wp-content/backups' -prune -o \
+  -path 'ROOT/wp-content/backups-dup-pro' -prune -o \
+  -path 'ROOT/wp-content/updraft' -prune -o \
+  -path 'ROOT/wp-content/uploads/backup-*' -prune -o \
+  -path 'ROOT/wp-content/uploads/backwpup-*' -prune -o \
+  -path 'ROOT/wp-content/cache' -prune -o \
+  -path 'ROOT/wp-content/uploads/cache' -prune -o \
+  -path 'ROOT/wp-content/w3tc-cache' -prune -o \
+  -path 'ROOT/wp-content/wp-rocket-cache' -prune -o \
+  -path 'ROOT/wp-content/litespeed' -prune -o \
+  -path 'ROOT/wp-content/ewww' -prune -o \
+  -path 'ROOT/wp-content/smush-webp' -prune -o \
+  -path 'ROOT/wp-content/uploads/wp-file-manager-pro/fm_backup' -prune -o \
+  -path 'ROOT/wp-config-backup.php' -prune -o \
+  -path 'ROOT/error_log' -prune -o \
+  -name '*.log' -prune -o \
+  -type f -print 2>/dev/null | wc -l | tr -d ' ')
+
 ARC_FILE_COUNT=$(tar -tzf "$OUT_FINAL" 2>/dev/null | grep -v '/$' | wc -l | tr -d ' ')
-
 SIZE=$(stat -c%s "$OUT_FINAL" 2>/dev/null || echo 0)
-SHA=$(sha256sum "$OUT_FINAL" | awk '{print $1}')
-
-# No errors → remove temp err capture
-cleanup_tmp
 
 echo
 log "Files backup completed."
 echo -e "${BLUE}Summary:${NC}"
 echo "  Output:           $(pwd)/$OUT_FINAL"
 echo "  Archive size:     $(numfmt --to=iec "$SIZE")"
-echo "  SHA256:           $SHA"
 echo "  Source files:     $SRC_FILE_COUNT (after excludes)"
 echo "  Archived files:   $ARC_FILE_COUNT"
 if (( SRC_FILE_COUNT == ARC_FILE_COUNT )); then
   echo -e "  Match:            ${GREEN}YES${NC} (counts identical)"
 else
   echo -e "  Match:            ${YELLOW}WARN${NC} (counts differ by $((SRC_FILE_COUNT-ARC_FILE_COUNT)))"
-  echo "                     *Differences can occur if excludes matched files in find differently than tar*"
+  echo "                     *If this persists, a file was added/removed during the run or an exclude differs.*"
 fi
+
+# ---------- Deep verification (optional, slower) ----------
+if (( DEEP_VERIFY == 1 )); then
+  info "Running deep verification (manifests)…"
+  SRC_MAN="source_manifest.txt"
+  ARC_MAN="archive_manifest.txt"
+  DIFF_MAN="manifest_diff.txt"
+
+  # Source manifest: list files relative to repo root (ROOT/...), after excludes
+  find ROOT \
+    -path 'ROOT/wp-content/ai1wm-backups' -prune -o \
+    -path 'ROOT/wp-content/backups' -prune -o \
+    -path 'ROOT/wp-content/backups-dup-pro' -prune -o \
+    -path 'ROOT/wp-content/updraft' -prune -o \
+    -path 'ROOT/wp-content/uploads/backup-*' -prune -o \
+    -path 'ROOT/wp-content/uploads/backwpup-*' -prune -o \
+    -path 'ROOT/wp-content/cache' -prune -o \
+    -path 'ROOT/wp-content/uploads/cache' -prune -o \
+    -path 'ROOT/wp-content/w3tc-cache' -prune -o \
+    -path 'ROOT/wp-content/wp-rocket-cache' -prune -o \
+    -path 'ROOT/wp-content/litespeed' -prune -o \
+    -path 'ROOT/wp-content/ewww' -prune -o \
+    -path 'ROOT/wp-content/smush-webp' -prune -o \
+    -path 'ROOT/wp-content/uploads/wp-file-manager-pro/fm_backup' -prune -o \
+    -path 'ROOT/wp-config-backup.php' -prune -o \
+    -path 'ROOT/error_log' -prune -o \
+    -name '*.log' -prune -o \
+    -type f -print 2>/dev/null \
+    | LC_ALL=C sort > "$SRC_MAN"
+
+  # Archive manifest: file paths as stored in the tar (also ROOT/…); ignore directories
+  tar -tzf "$OUT_FINAL" 2>/dev/null | grep -v '/$' | LC_ALL=C sort > "$ARC_MAN"
+
+  # Differences
+  LC_ALL=C comm -3 "$SRC_MAN" "$ARC_MAN" > "$DIFF_MAN" || true
+
+  SRC_MN=$(wc -l < "$SRC_MAN" | tr -d ' ')
+  ARC_MN=$(wc -l < "$ARC_MAN" | tr -d ' ')
+  DIFF_MN=$(wc -l < "$DIFF_MAN" | tr -d ' ')
+
+  echo
+  echo -e "${BLUE}Deep verification:${NC}"
+  echo "  Source manifest:   $SRC_MN files  -> $SRC_MAN"
+  echo "  Archive manifest:  $ARC_MN files  -> $ARC_MAN"
+  if (( DIFF_MN == 0 )); then
+    echo -e "  Diff:              ${GREEN}none${NC} (perfect match)"
+    # optional: clean manifests if you prefer
+    # rm -f "$SRC_MAN" "$ARC_MAN" "$DIFF_MAN"
+  else
+    echo -e "  Diff:              ${YELLOW}$DIFF_MN entries${NC} -> $DIFF_MAN (first 20 lines below)"
+    sed -n '1,20p' "$DIFF_MAN"
+  fi
+fi
+
+# No errors → remove temp err capture
+cleanup_tmp
 
 # Success → self-delete
 self_delete
