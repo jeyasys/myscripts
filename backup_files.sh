@@ -2,14 +2,19 @@
 # WordPress files backup with excludes, space check, prompt, progress, safe writes
 set -Eeuo pipefail
 
-# ============ Styling ============
+# ---------- Self-delete on exit ----------
+SELF_PATH="$(realpath "$0" 2>/dev/null || echo "$0")"
+cleanup_self() { echo "Deleting script: $SELF_PATH"; rm -f -- "$SELF_PATH" >/dev/null 2>&1 || true; }
+trap cleanup_self EXIT
+
+# ---------- Styling ----------
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[$(date +'%F %T')]${NC} $*"; }
 info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*"; }
 
-# ============ Preconditions ============
+# ---------- Preconditions ----------
 if [[ ! -d ./ROOT || ! -f ./ROOT/wp-config.php ]]; then
   err "Please run this from /var/www/webroot (ROOT must exist here)."
   exit 1
@@ -20,16 +25,16 @@ OUT_TMP="${OUT_FINAL}.tmp.$$"
 ERR_LOG="backup_files.err.log"
 : > "$ERR_LOG"
 
-# Clean up temp file on error/interrupt
-cleanup() {
+# Clean up partials on error/interrupt
+cleanup_partials() {
   if [[ -f "$OUT_TMP" ]]; then
     warn "Cleaning up partial archive: $OUT_TMP"
     mv -f "$OUT_TMP" "${OUT_FINAL}.partial.$(date +%s)" 2>/dev/null || rm -f "$OUT_TMP" || true
   fi
 }
-trap cleanup INT TERM ERR
+trap cleanup_partials INT TERM ERR
 
-# ============ Excludes (matches your manager’s defaults) ============
+# ---------- Excludes (same defaults) ----------
 read -r -d '' EXCLUDES <<'EOF'
 --exclude=ROOT/wp-content/ai1wm-backups
 --exclude=ROOT/wp-content/backups
@@ -52,20 +57,19 @@ read -r -d '' EXCLUDES <<'EOF'
 --exclude=*.log
 EOF
 
-# ============ Space analysis ============
+# ---------- Space analysis ----------
 WP_BYTES=$(du -sb ROOT 2>/dev/null | awk '{print $1}')
 AVAIL_BYTES=$(df -B1 . | awk 'NR==2{print $4}')
-REQUIRED_BYTES=$(( (WP_BYTES * 110) / 100 ))  # 10% cushion
+REQUIRED_BYTES=$(( (WP_BYTES * 110) / 100 ))  # +10% buffer
 
 echo
 info "=== Disk Space Analysis ==="
-echo "WordPress dir size: $(numfmt --to=iec $WP_BYTES)"
-echo "Required (with 10% buffer): $(numfmt --to=iec $REQUIRED_BYTES)"
-echo "Available on target FS:      $(numfmt --to=iec $AVAIL_BYTES)"
-
-# Best-effort estimate (not enforced) for gzip compression ratio ~0.60
+echo "WordPress dir size:           $(numfmt --to=iec $WP_BYTES)"
+echo "Required (with 10% buffer):   $(numfmt --to=iec $REQUIRED_BYTES)"
+echo "Available on target FS:       $(numfmt --to=iec $AVAIL_BYTES)"
+# Rough estimate for info only
 EST_GZ_BYTES=$(( (WP_BYTES * 60) / 100 ))
-echo "Estimated .tar.gz size (rough): $(numfmt --to=iec $EST_GZ_BYTES)"
+echo "Estimated .tar.gz size (~60%): $(numfmt --to=iec $EST_GZ_BYTES)"
 echo
 
 PROCEED_DEFAULT="N"
@@ -82,11 +86,9 @@ if [[ ! $ans =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
-# ============ Archive ============
+# ---------- Archive ----------
 log "Creating archive (gzip)…"
-# Prefer progress via pv if available
 if command -v pv >/dev/null 2>&1; then
-  # tar to stdout -> pv (progress over uncompressed bytes) -> gzip -> temp file
   set +e
   tar -cpf - --acls --xattrs --numeric-owner ${EXCLUDES} ROOT 2>>"$ERR_LOG" \
     | pv -s "$WP_BYTES" \
@@ -96,12 +98,10 @@ if command -v pv >/dev/null 2>&1; then
   set -e
 else
   warn "pv not found; showing basic progress (bytes written)…"
-  # Background pipeline; poll size of output file
   set +e
   ( tar -cpf - --acls --xattrs --numeric-owner ${EXCLUDES} ROOT 2>>"$ERR_LOG" \
     | gzip -9 > "$OUT_TMP" ) &
   PIPE_PID=$!
-
   while kill -0 "$PIPE_PID" 2>/dev/null; do
     if [[ -f "$OUT_TMP" ]]; then
       CUR=$(stat -c%s "$OUT_TMP" 2>/dev/null || echo 0)
@@ -120,7 +120,6 @@ echo
 if [[ -s "$ERR_LOG" ]]; then
   warn "tar/gzip messages captured in $ERR_LOG"
 fi
-
 if [[ ${TAR_STATUS:-0} -ne 0 || ${GZ_STATUS:-0} -ne 0 || ! -s "$OUT_TMP" ]]; then
   err "Archive failed. See $ERR_LOG"
   exit 1
