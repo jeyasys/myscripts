@@ -106,7 +106,7 @@ if command -v pv >/dev/null 2>&1; then
   set +e
   tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
     | pv -s "$WP_BYTES" \
-    | gzip -9 > "$OUT_TMP"
+    | gzip -6 --rsyncable > "$OUT_TMP"
   # Capture statuses immediately (guard for set -u)
   _ps=("${PIPESTATUS[@]:-}")
   TAR_STATUS="${_ps[0]:-1}"
@@ -117,7 +117,7 @@ else
   # Fallback progress (bytes written)
   set +e
   ( tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
-    | gzip -9 > "$OUT_TMP" ) &
+    | gzip -6 --rsyncable > "$OUT_TMP" ) &
   PIPE_PID=$!
   while kill -0 "$PIPE_PID" 2>/dev/null; do
     if [[ -f "$OUT_TMP" ]]; then
