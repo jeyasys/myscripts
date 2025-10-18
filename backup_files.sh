@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# WordPress files backup with excludes, space check, progress, safe writes
-# No log file unless an error occurs. Self-delete on success or on space-abort.
+# WordPress files backup (gzip), excludes, progress, safe write, quick verification.
+# No log file unless there’s an error. Self-delete on success or space-abort.
 set -Eeuo pipefail
 
 # ---------- Styling ----------
@@ -15,17 +15,16 @@ self_delete() { echo "Deleting script: $SELF_PATH"; rm -f -- "$SELF_PATH" >/dev/
 
 # ---------- Preconditions ----------
 if [[ ! -d ./ROOT || ! -f ./ROOT/wp-config.php ]]; then
-  err "Please run this script from /var/www/webroot (must contain ./ROOT and ./ROOT/wp-config.php)."
+  err "Please run from /var/www/webroot (must contain ./ROOT and ./ROOT/wp-config.php)."
   exit 1
 fi
 
 OUT_FINAL="ROOT.tar.gz"
 OUT_TMP="${OUT_FINAL}.tmp.$$"
 
-# Capture stderr to a temp file; only persist it if an error actually happens
+# Temp stderr capture; only persist if there’s an actual error
 TMP_ERR="$(mktemp -t files_backup_err.XXXXXX)"
 cleanup_tmp() { rm -f "$TMP_ERR" >/dev/null 2>&1 || true; }
-# Keep partial archives on unexpected errors so you can inspect them
 cleanup_partial_on_err() {
   if [[ -f "$OUT_TMP" ]]; then
     warn "Keeping partial archive as ${OUT_FINAL}.partial.$(date +%s)"
@@ -34,7 +33,7 @@ cleanup_partial_on_err() {
 }
 trap cleanup_partial_on_err INT TERM ERR
 
-# ---------- Excludes (ARRAY; this fixes the previous exit bug) ----------
+# ---------- Excludes ----------
 EXCLUDES=(
   --exclude=ROOT/wp-content/ai1wm-backups
   --exclude=ROOT/wp-content/backups
@@ -57,6 +56,20 @@ EXCLUDES=(
   --exclude=*.log
 )
 
+# Build a corresponding find(1) prune expression for verification counting
+# (we only exclude directories/prefix-es we know; glob file patterns are handled with -path)
+build_find_prunes() {
+  local args=()
+  local pat
+  for pat in "${EXCLUDES[@]}"; do
+    pat="${pat#--exclude=}"
+    # find expects paths without leading ./, our tree is ROOT/...
+    # Use -path 'pattern' -prune -o for both dirs and file globs.
+    args+=( -path "$pat" -prune -o )
+  done
+  printf '%s\n' "${args[@]}"
+}
+
 # ---------- Space analysis ----------
 WP_BYTES=$(du -sb ROOT 2>/dev/null | awk '{print $1}')
 AVAIL_BYTES=$(df -B1 . | awk 'NR==2{print $4}')
@@ -67,7 +80,7 @@ info "=== Disk Space Analysis ==="
 echo "WordPress dir size:           $(numfmt --to=iec "$WP_BYTES")"
 echo "Required (with 10% buffer):   $(numfmt --to=iec "$REQUIRED_BYTES")"
 echo "Available on target FS:       $(numfmt --to=iec "$AVAIL_BYTES")"
-EST_GZ_BYTES=$(( (WP_BYTES * 60) / 100 ))  # rough gzip estimate ~60%
+EST_GZ_BYTES=$(( (WP_BYTES * 60) / 100 ))  # rough estimate for gzip
 echo "Estimated .tar.gz size (~60%): $(numfmt --to=iec "$EST_GZ_BYTES")"
 echo
 
@@ -86,17 +99,22 @@ fi
 
 # ---------- Create archive ----------
 log "Creating archive at $(pwd)/$OUT_FINAL (gzip)…"
+info "Progress…"
+
 if command -v pv >/dev/null 2>&1; then
-  info "Using pv for progress…"
+  # Use pv for progress; protect PIPESTATUS access with defaults to avoid 'unbound variable'
   set +e
   tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
     | pv -s "$WP_BYTES" \
     | gzip -9 > "$OUT_TMP"
-  TAR_STATUS=${PIPESTATUS[0]}
-  GZ_STATUS=${PIPESTATUS[2]}
+  # Capture statuses immediately (guard for set -u)
+  _ps=("${PIPESTATUS[@]:-}")
+  TAR_STATUS="${_ps[0]:-1}"
+  GZ_STATUS="${_ps[2]:-1}"
+  unset _ps
   set -e
 else
-  warn "pv not found; showing basic progress (bytes written)…"
+  # Fallback progress (bytes written)
   set +e
   ( tar -cpf - --acls --xattrs --numeric-owner "${EXCLUDES[@]}" ROOT 2>>"$TMP_ERR" \
     | gzip -9 > "$OUT_TMP" ) &
@@ -104,7 +122,7 @@ else
   while kill -0 "$PIPE_PID" 2>/dev/null; do
     if [[ -f "$OUT_TMP" ]]; then
       CUR=$(stat -c%s "$OUT_TMP" 2>/dev/null || echo 0)
-      printf "\r${BLUE}[INFO]${NC} Written: %s" "$(numfmt --to=iec "$CUR")"
+      printf "\r${BLUE}[INFO]${NC} Progress… %s" "$(numfmt --to=iec "$CUR")"
     fi
     sleep 2
   done
@@ -116,7 +134,7 @@ else
 fi
 
 # ---------- Handle result ----------
-if [[ ${TAR_STATUS:-0} -ne 0 || ${GZ_STATUS:-0} -ne 0 || ! -s "$OUT_TMP" ]]; then
+if [[ ${TAR_STATUS:-1} -ne 0 || ${GZ_STATUS:-1} -ne 0 || ! -s "$OUT_TMP" ]]; then
   err "Archive creation failed."
   if [[ -s "$TMP_ERR" ]]; then
     mv -f "$TMP_ERR" backup_files.err.log 2>/dev/null || true
@@ -128,18 +146,49 @@ if [[ ${TAR_STATUS:-0} -ne 0 || ${GZ_STATUS:-0} -ne 0 || ! -s "$OUT_TMP" ]]; the
 fi
 
 mv -f "$OUT_TMP" "$OUT_FINAL"
+
+# ---------- Quick verification ----------
+# 1) gzip integrity test
+if ! gzip -t "$OUT_FINAL" 2>>"$TMP_ERR"; then
+  err "gzip integrity test FAILED for $OUT_FINAL"
+  if [[ -s "$TMP_ERR" ]]; then mv -f "$TMP_ERR" backup_files.err.log; echo "Details: $(pwd)/backup_files.err.log"; fi
+  exit 1
+fi
+
+# 2) tar list test (ensures tar stream is readable)
+if ! tar -tzf "$OUT_FINAL" > /dev/null 2>>"$TMP_ERR"; then
+  err "tar readability test FAILED for $OUT_FINAL"
+  if [[ -s "$TMP_ERR" ]]; then mv -f "$TMP_ERR" backup_files.err.log; echo "Details: $(pwd)/backup_files.err.log"; fi
+  exit 1
+fi
+
+# 3) Count source files (excluding patterns) vs files in archive
+#    (files only; dirs not counted)
+mapfile -t PRUNES < <(build_find_prunes)
+# shellcheck disable=SC2068
+SRC_FILE_COUNT=$(find ROOT \( ${PRUNES[@]} -false \) -type f -print 2>/dev/null | wc -l | tr -d ' ')
+ARC_FILE_COUNT=$(tar -tzf "$OUT_FINAL" 2>/dev/null | grep -v '/$' | wc -l | tr -d ' ')
+
 SIZE=$(stat -c%s "$OUT_FINAL" 2>/dev/null || echo 0)
 SHA=$(sha256sum "$OUT_FINAL" | awk '{print $1}')
 
-# No errors → remove temp err capture silently
+# No errors → remove temp err capture
 cleanup_tmp
 
 echo
 log "Files backup completed."
 echo -e "${BLUE}Summary:${NC}"
-echo "  Output: $(pwd)/$OUT_FINAL"
-echo "  Size:   $(numfmt --to=iec "$SIZE")"
-echo "  SHA256: $SHA"
+echo "  Output:           $(pwd)/$OUT_FINAL"
+echo "  Archive size:     $(numfmt --to=iec "$SIZE")"
+echo "  SHA256:           $SHA"
+echo "  Source files:     $SRC_FILE_COUNT (after excludes)"
+echo "  Archived files:   $ARC_FILE_COUNT"
+if (( SRC_FILE_COUNT == ARC_FILE_COUNT )); then
+  echo -e "  Match:            ${GREEN}YES${NC} (counts identical)"
+else
+  echo -e "  Match:            ${YELLOW}WARN${NC} (counts differ by $((SRC_FILE_COUNT-ARC_FILE_COUNT)))"
+  echo "                     *Differences can occur if excludes matched files in find differently than tar*"
+fi
 
 # Success → self-delete
 self_delete
