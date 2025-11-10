@@ -348,7 +348,7 @@ a.link{color:#0d6efd;text-decoration:none}
 
 <div class="top" style="display:flex;align-items:center;gap:10px">
   <div>Expires in <span id=cd><?=sprintf('%02d:%02d', intdiv($remain,60), $remain%60)?></span></div>
-  <button class="btn blue" type="button" onclick="extendExpiry()">Extend +5 min</button>
+  <button class="btn blue" type="button" onclick="extendExpiry()">Extend +25 min</button>
   <form method="post" action="?kill=1" style="margin-left:auto" onsubmit="return confirm('Delete this file manager script now?');">
     <input type="hidden" name="token" value="<?=h($TOKEN)?>">
     <button class="btn red" type="submit">Delete This Script</button>
