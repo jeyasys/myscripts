@@ -89,26 +89,26 @@ THRESHOLD_BYTES=$((10 * 1024 * 1024 * 1024))  # 10 GB
 if [[ "$TOTAL_BYTES" -gt "$THRESHOLD_BYTES" ]]; then
   echo
   echo "Total size is above 10 GB."
-  echo "Top 10 largest files under $WP_ROOT:"
+  echo "Top 20 largest files under $WP_ROOT:"
   echo
 
   (
     cd "$WP_ROOT" || exit 0
 
     if command -v numfmt >/dev/null 2>&1; then
-      # Use bytes + numfmt (more robust and fast)
+      # Use bytes + numfmt (fast, reliable)
       find . -type f -printf '%s\t%p\n' 2>/dev/null \
         | sort -rn 2>/dev/null \
-        | head -n 10 \
+        | head -n 20 \
         | while IFS=$'\t' read -r size path; do
             human=$(numfmt --to=iec --suffix=B "$size" 2>/dev/null || echo "$size")
             printf "%-10s %s\n" "$human" "$path"
           done
     else
-      # Fallback: du -sh (can be slower, but no extra deps)
+      # Fallback: du -sh
       find . -type f -exec du -sh {} + 2>/dev/null \
         | sort -rh 2>/dev/null \
-        | head -n 10
+        | head -n 20
     fi
   ) || echo "Warning: Failed to list largest files (permissions or load)."
 fi
@@ -138,7 +138,7 @@ else
   fi
 
   echo
-  echo "Top 10 tables by row count:"
+  echo "Top 20 tables by row count:"
   if ! mysql -h "$DB_HOST" -u "$DB_USER" -e "
     SELECT table_name AS 'Table',
            table_rows AS 'Rows',
@@ -146,7 +146,7 @@ else
     FROM information_schema.tables
     WHERE table_schema = '$DB_NAME'
     ORDER BY table_rows DESC
-    LIMIT 10;
+    LIMIT 20;
   "; then
     echo "Error: Unable to query table statistics."
   fi
