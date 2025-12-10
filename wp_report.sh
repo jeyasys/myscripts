@@ -82,6 +82,27 @@ TOTAL_HUMAN=$(du -sh "$WP_ROOT" 2>/dev/null | cut -f1 || echo "N/A")
 
 echo "Total size : $TOTAL_HUMAN"
 echo
+echo
+echo "Disk Space Summary:"
+
+# Detect main filesystem for WP root
+DF_LINE=$(df -k "$WP_ROOT" | tail -1)
+
+DF_SIZE=$(echo "$DF_LINE" | awk '{print $2}')
+DF_USED=$(echo "$DF_LINE" | awk '{print $3}')
+DF_AVAIL=$(echo "$DF_LINE" | awk '{print $4}')
+DF_USEP=$(echo "$DF_LINE" | awk '{print $5}')
+
+# Convert KB → human readable (same as df -h)
+HR_SIZE=$(numfmt --to=iec --suffix=B "$((DF_SIZE * 1024))")
+HR_USED=$(numfmt --to=iec --suffix=B "$((DF_USED * 1024))")
+HR_AVAIL=$(numfmt --to=iec --suffix=B "$((DF_AVAIL * 1024))")
+
+printf "+--------------+--------------+--------------+--------+\n"
+printf "| Total        | Used         | Available    | Use%%  |\n"
+printf "+--------------+--------------+--------------+--------+\n"
+printf "| %-12s | %-12s | %-12s | %-6s |\n" "$HR_SIZE" "$HR_USED" "$HR_AVAIL" "$DF_USEP"
+printf "+--------------+--------------+--------------+--------+\n\n"
 echo "Top 20 largest files under $WP_ROOT:"
 echo
 
