@@ -53,41 +53,30 @@ get_const() {
 DB_NAME="$(get_const DB_NAME)"
 DB_USER="$(get_const DB_USER)"
 DB_PASS="$(get_const DB_PASSWORD)"
-DB_HOST_CFG="$(get_const DB_HOST)"
+DB_HOST="$(get_const DB_HOST)"
 
-# Default if DB_HOST not set
-if [[ -n "${DB_HOST_CFG:-}" ]]; then
-  DB_HOST="$DB_HOST_CFG"
-else
-  DB_HOST="127.0.0.1"
-fi
+# Defaults
+[[ -n "${DB_HOST:-}" ]] || DB_HOST="127.0.0.1"
 
 DB_AVAILABLE=1
+DB_REASON=""
+
 if [[ -z "${DB_NAME:-}" || -z "${DB_USER:-}" ]]; then
   DB_AVAILABLE=0
+  DB_REASON="DB_NAME or DB_USER could not be read from wp-config.php."
 fi
 
 if ! command -v mysql >/dev/null 2>&1; then
   DB_AVAILABLE=0
+  if [[ -n "$DB_REASON" ]]; then
+    DB_REASON="$DB_REASON mysql client not found in PATH."
+  else
+    DB_REASON="mysql client not found in PATH."
+  fi
 fi
 
 if [[ $DB_AVAILABLE -eq 1 ]]; then
   export MYSQL_PWD="${DB_PASS:-}"
-
-  # Detect a working DB host: DB_HOST from config, then localhost, then 127.0.0.1
-  DETECTED_HOST=""
-  for host in "$DB_HOST" "localhost" "127.0.0.1"; do
-    if mysql -h "$host" -u "$DB_USER" -e "SELECT 1" >/dev/null 2>&1; then
-      DETECTED_HOST="$host"
-      break
-    fi
-  done
-
-  if [[ -n "$DETECTED_HOST" ]]; then
-    DB_HOST="$DETECTED_HOST"
-  else
-    DB_AVAILABLE=0
-  fi
 fi
 
 #######################################
@@ -142,26 +131,24 @@ step 2 "$TOTAL_STEPS" "Database summary"
 
 if [[ $DB_AVAILABLE -eq 0 ]]; then
   echo "Database info not available."
-  echo "Either mysql client is missing, or DB_NAME/DB_USER could not be read, or DB host is not reachable."
+  [[ -n "$DB_REASON" ]] && echo "$DB_REASON"
 else
   echo "Database   : $DB_NAME"
   echo "DB Host    : $DB_HOST"
   echo
 
   echo "Total database size (MB):"
-  if ! mysql -h "$DB_HOST" -u "$DB_USER" -e "
+  mysql -h "$DB_HOST" -u "$DB_USER" -e "
     SELECT table_schema AS 'Database',
            ROUND(SUM(data_length + index_length)/1024/1024, 2) AS 'Size_MB'
     FROM information_schema.tables
     WHERE table_schema = '$DB_NAME'
     GROUP BY table_schema;
-  "; then
-    echo "Error: Unable to query database size."
-  fi
+  " || echo "Error: Unable to query database size (see MySQL error above)."
 
   echo
   echo "Top 20 tables by row count:"
-  if ! mysql -h "$DB_HOST" -u "$DB_USER" -e "
+  mysql -h "$DB_HOST" -u "$DB_USER" -e "
     SELECT table_name AS 'Table',
            table_rows AS 'Rows',
            ROUND((data_length + index_length)/1024/1024, 2) AS 'Size_MB'
@@ -169,9 +156,7 @@ else
     WHERE table_schema = '$DB_NAME'
     ORDER BY table_rows DESC
     LIMIT 20;
-  "; then
-    echo "Error: Unable to query table statistics."
-  fi
+  " || echo "Error: Unable to query table statistics (see MySQL error above)."
 fi
 
 #######################################
