@@ -79,39 +79,30 @@ step 1 "$TOTAL_STEPS" "Filesystem (WordPress root)"
 # Human-readable total size
 TOTAL_HUMAN=$(du -sh "$WP_ROOT" 2>/dev/null | cut -f1 || echo "N/A")
 
-# Exact size in bytes for threshold check
-TOTAL_BYTES=$(du -sb "$WP_ROOT" 2>/dev/null | cut -f1 || echo 0)
-
 echo "Total size : $TOTAL_HUMAN"
+echo
+echo "Top 20 largest files under $WP_ROOT:"
+echo
 
-THRESHOLD_BYTES=$((10 * 1024 * 1024 * 1024))  # 10 GB
+(
+  cd "$WP_ROOT" || exit 0
 
-if [[ "$TOTAL_BYTES" -gt "$THRESHOLD_BYTES" ]]; then
-  echo
-  echo "Total size is above 10 GB."
-  echo "Top 20 largest files under $WP_ROOT:"
-  echo
-
-  (
-    cd "$WP_ROOT" || exit 0
-
-    if command -v numfmt >/dev/null 2>&1; then
-      # Use bytes + numfmt (fast, reliable)
-      find . -type f -printf '%s\t%p\n' 2>/dev/null \
-        | sort -rn 2>/dev/null \
-        | head -n 20 \
-        | while IFS=$'\t' read -r size path; do
-            human=$(numfmt --to=iec --suffix=B "$size" 2>/dev/null || echo "$size")
-            printf "%-10s %s\n" "$human" "$path"
-          done
-    else
-      # Fallback: du -sh
-      find . -type f -exec du -sh {} + 2>/dev/null \
-        | sort -rh 2>/dev/null \
-        | head -n 20
-    fi
-  ) || echo "Warning: Failed to list largest files (permissions or load)."
-fi
+  if command -v numfmt >/dev/null 2>&1; then
+    # Fast & reliable: use bytes, then convert to human
+    find . -type f -printf '%s\t%p\n' 2>/dev/null \
+      | sort -rn 2>/dev/null \
+      | head -n 20 \
+      | while IFS=$'\t' read -r size path; do
+          human=$(numfmt --to=iec --suffix=B "$size" 2>/dev/null || echo "$size")
+          printf "%-10s %s\n" "$human" "$path"
+        done
+  else
+    # Fallback: du -sh for each file (slower)
+    find . -type f -exec du -sh {} + 2>/dev/null \
+      | sort -rh 2>/dev/null \
+      | head -n 20
+  fi
+) || echo "Warning: Failed to list largest files (permissions or load)."
 
 #######################################
 # Step 2: Database summary
