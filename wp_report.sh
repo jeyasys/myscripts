@@ -111,23 +111,26 @@ if command -v wp >/dev/null 2>&1; then
   ###################################
   # Primary path: WP-CLI
   ###################################
-  echo "Using WP-CLI for database detection."
+  echo "Using WP-CLI for database detection (skip plugins/themes)."
   echo
 
   (
     cd "$WP_ROOT" || exit 0
 
-    echo "DB status:"
-    wp db status || echo "Warning: wp db status failed."
+    # DB name from wp-config (for reference)
+    if [[ -n "${DB_NAME:-}" ]]; then
+      echo "Database   : $DB_NAME"
+    fi
     echo
 
-    echo "Total database size:"
-    # This prints DB name and total size
-    wp db size --size_format=mb || echo "Warning: wp db size failed."
+    echo "Total database size (MB):"
+    # wp db size (numeric, in MB)
+    wp --skip-plugins --skip-themes db size --size_format=mb 2>/dev/null \
+      || echo "Warning: wp db size failed."
     echo
 
     echo "Top 20 tables by row count:"
-    wp db query "
+    wp --skip-plugins --skip-themes db query "
       SELECT table_name AS 'Table',
              table_rows AS 'Rows',
              ROUND((data_length + index_length)/1024/1024, 2) AS 'Size_MB'
