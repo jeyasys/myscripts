@@ -57,6 +57,9 @@ DB_PASS="$(get_const DB_PASSWORD)"
 DB_HOST="$(get_const DB_HOST)"
 [[ -n "${DB_HOST:-}" ]] || DB_HOST="127.0.0.1"
 
+# Extra sanitize in shell (strip any stray newlines)
+DB_NAME="$(echo "${DB_NAME:-}" | tr -d '\r\n')"
+
 #######################################
 # Header
 #######################################
@@ -117,18 +120,27 @@ if command -v wp >/dev/null 2>&1; then
   (
     cd "$WP_ROOT" || exit 0
 
-    # DB name from wp-config (for reference)
+    # DB name row
     if [[ -n "${DB_NAME:-}" ]]; then
       echo "Database   : $DB_NAME"
+      echo
     fi
-    echo
 
     echo "Total database size (MB):"
-    # wp db size (numeric, in MB)
-    wp --skip-plugins --skip-themes db size --size_format=mb 2>/dev/null \
-      || echo "Warning: wp db size failed."
-    echo
+    # Get just the number from wp db size
+    DB_TOTAL_MB="$(wp --skip-plugins --skip-themes db size --size_format=mb --quiet 2>/dev/null || echo "")"
 
+    if [[ -n "$DB_TOTAL_MB" ]]; then
+      printf "+----------------+---------+\n"
+      printf "| Database       | Size_MB |\n"
+      printf "+----------------+---------+\n"
+      printf "| %-14s | %7s |\n" "${DB_NAME:-DATABASE}" "$DB_TOTAL_MB"
+      printf "+----------------+---------+\n"
+    else
+      echo "Warning: wp db size failed."
+    fi
+
+    echo
     echo "Top 20 tables by row count:"
     wp --skip-plugins --skip-themes db query "
       SELECT table_name AS 'Table',
