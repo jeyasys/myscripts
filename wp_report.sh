@@ -34,17 +34,33 @@ fi
 
 #######################################
 # Helper to read constants from wp-config.php
+# (trim whitespace/newlines in PHP itself)
 #######################################
 get_const() {
-  php -r "include '$WP_CFG'; echo defined('$1') ? constant('$1') : '';" 2>/dev/null
+  php -r "
+    include '$WP_CFG';
+    if (defined('$1')) {
+      \$v = constant('$1');
+      if (is_string(\$v)) {
+        echo trim(\$v);
+      } else {
+        echo \$v;
+      }
+    }
+  " 2>/dev/null
 }
 
 DB_NAME="$(get_const DB_NAME)"
 DB_USER="$(get_const DB_USER)"
 DB_PASS="$(get_const DB_PASSWORD)"
-DB_HOST="$(get_const DB_HOST)"
+DB_HOST_CFG="$(get_const DB_HOST)"
 
-[[ -n "${DB_HOST:-}" ]] || DB_HOST="127.0.0.1"
+# Default if DB_HOST not set
+if [[ -n "${DB_HOST_CFG:-}" ]]; then
+  DB_HOST="$DB_HOST_CFG"
+else
+  DB_HOST="127.0.0.1"
+fi
 
 DB_AVAILABLE=1
 if [[ -z "${DB_NAME:-}" || -z "${DB_USER:-}" ]]; then
@@ -57,6 +73,21 @@ fi
 
 if [[ $DB_AVAILABLE -eq 1 ]]; then
   export MYSQL_PWD="${DB_PASS:-}"
+
+  # Detect a working DB host: DB_HOST from config, then localhost, then 127.0.0.1
+  DETECTED_HOST=""
+  for host in "$DB_HOST" "localhost" "127.0.0.1"; do
+    if mysql -h "$host" -u "$DB_USER" -e "SELECT 1" >/dev/null 2>&1; then
+      DETECTED_HOST="$host"
+      break
+    fi
+  done
+
+  if [[ -n "$DETECTED_HOST" ]]; then
+    DB_HOST="$DETECTED_HOST"
+  else
+    DB_AVAILABLE=0
+  fi
 fi
 
 #######################################
@@ -111,7 +142,7 @@ step 2 "$TOTAL_STEPS" "Database summary"
 
 if [[ $DB_AVAILABLE -eq 0 ]]; then
   echo "Database info not available."
-  echo "Either mysql client is missing, or DB_NAME/DB_USER could not be read from wp-config.php."
+  echo "Either mysql client is missing, or DB_NAME/DB_USER could not be read, or DB host is not reachable."
 else
   echo "Database   : $DB_NAME"
   echo "DB Host    : $DB_HOST"
