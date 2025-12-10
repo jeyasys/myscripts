@@ -50,34 +50,12 @@ get_const() {
   " 2>/dev/null
 }
 
+# Constants (used mainly for MySQL fallback; DB_NAME also for display)
 DB_NAME="$(get_const DB_NAME)"
 DB_USER="$(get_const DB_USER)"
 DB_PASS="$(get_const DB_PASSWORD)"
 DB_HOST="$(get_const DB_HOST)"
-
-# Defaults
 [[ -n "${DB_HOST:-}" ]] || DB_HOST="127.0.0.1"
-
-DB_AVAILABLE=1
-DB_REASON=""
-
-if [[ -z "${DB_NAME:-}" || -z "${DB_USER:-}" ]]; then
-  DB_AVAILABLE=0
-  DB_REASON="DB_NAME or DB_USER could not be read from wp-config.php."
-fi
-
-if ! command -v mysql >/dev/null 2>&1; then
-  DB_AVAILABLE=0
-  if [[ -n "$DB_REASON" ]]; then
-    DB_REASON="$DB_REASON mysql client not found in PATH."
-  else
-    DB_REASON="mysql client not found in PATH."
-  fi
-fi
-
-if [[ $DB_AVAILABLE -eq 1 ]]; then
-  export MYSQL_PWD="${DB_PASS:-}"
-fi
 
 #######################################
 # Header
@@ -125,38 +103,96 @@ echo
 ) || echo "Warning: Failed to list largest files (permissions or load)."
 
 #######################################
-# Step 2: Database summary
+# Step 2: Database summary (WP-CLI first, then MySQL fallback)
 #######################################
 step 2 "$TOTAL_STEPS" "Database summary"
 
-if [[ $DB_AVAILABLE -eq 0 ]]; then
-  echo "Database info not available."
-  [[ -n "$DB_REASON" ]] && echo "$DB_REASON"
+if command -v wp >/dev/null 2>&1; then
+  ###################################
+  # Primary path: WP-CLI
+  ###################################
+  echo "Using WP-CLI for database detection."
+  echo
+
+  (
+    cd "$WP_ROOT" || exit 0
+
+    echo "DB status:"
+    wp db status || echo "Warning: wp db status failed."
+    echo
+
+    echo "Total database size:"
+    # This prints DB name and total size
+    wp db size --size_format=mb || echo "Warning: wp db size failed."
+    echo
+
+    echo "Top 20 tables by row count:"
+    wp db query "
+      SELECT table_name AS 'Table',
+             table_rows AS 'Rows',
+             ROUND((data_length + index_length)/1024/1024, 2) AS 'Size_MB'
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE()
+      ORDER BY table_rows DESC
+      LIMIT 20;
+    " || echo "Warning: wp db query failed (see error above)."
+  )
+
 else
-  echo "Database   : $DB_NAME"
-  echo "DB Host    : $DB_HOST"
+  ###################################
+  # Fallback path: mysql + wp-config
+  ###################################
+  echo "WP-CLI not found. Falling back to mysql + wp-config.php."
   echo
 
-  echo "Total database size (MB):"
-  mysql -h "$DB_HOST" -u "$DB_USER" -e "
-    SELECT table_schema AS 'Database',
-           ROUND(SUM(data_length + index_length)/1024/1024, 2) AS 'Size_MB'
-    FROM information_schema.tables
-    WHERE table_schema = '$DB_NAME'
-    GROUP BY table_schema;
-  " || echo "Error: Unable to query database size (see MySQL error above)."
+  DB_AVAILABLE=1
+  DB_REASON=""
 
-  echo
-  echo "Top 20 tables by row count:"
-  mysql -h "$DB_HOST" -u "$DB_USER" -e "
-    SELECT table_name AS 'Table',
-           table_rows AS 'Rows',
-           ROUND((data_length + index_length)/1024/1024, 2) AS 'Size_MB'
-    FROM information_schema.tables
-    WHERE table_schema = '$DB_NAME'
-    ORDER BY table_rows DESC
-    LIMIT 20;
-  " || echo "Error: Unable to query table statistics (see MySQL error above)."
+  if [[ -z "${DB_NAME:-}" || -z "${DB_USER:-}" ]]; then
+    DB_AVAILABLE=0
+    DB_REASON="DB_NAME or DB_USER could not be read from wp-config.php."
+  fi
+
+  if ! command -v mysql >/dev/null 2>&1; then
+    DB_AVAILABLE=0
+    if [[ -n "$DB_REASON" ]]; then
+      DB_REASON="$DB_REASON mysql client not found in PATH."
+    else
+      DB_REASON="mysql client not found in PATH."
+    fi
+  fi
+
+  if [[ $DB_AVAILABLE -eq 0 ]]; then
+    echo "Database info not available."
+    [[ -n "$DB_REASON" ]] && echo "$DB_REASON"
+  else
+    export MYSQL_PWD="${DB_PASS:-}"
+
+    echo "Database   : ${DB_NAME:-UNKNOWN}"
+    echo "DB Host    : ${DB_HOST:-UNKNOWN}"
+    echo
+
+    echo "Total database size (MB):"
+    mysql -h "$DB_HOST" -u "$DB_USER" -e "
+      SELECT table_schema AS 'Database',
+             ROUND(SUM(data_length + index_length)/1024/1024, 2) AS 'Size_MB'
+      FROM information_schema.tables
+      WHERE table_schema = '$DB_NAME'
+      GROUP BY table_schema;
+    " || echo "Error: Unable to query database size (see MySQL error above)."
+
+    echo
+    echo "Top 20 tables by row count:"
+    mysql -h "$DB_HOST" -u "$DB_USER" -e "
+      SELECT table_name AS 'Table',
+             table_rows AS 'Rows',
+             ROUND((data_length + index_length)/1024/1024, 2) AS 'Size_MB'
+      FROM information_schema.tables
+      WHERE table_schema = '$DB_NAME'
+      ORDER BY table_rows DESC
+      LIMIT 20;
+    " || echo "Error: Unable to query table statistics (see MySQL error above)."
+  fi
 fi
 
 #######################################
