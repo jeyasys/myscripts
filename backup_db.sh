@@ -117,20 +117,25 @@ BASE_ARGS=(
 EST_DB_BYTES="$($WP db size --allow-root --skip-plugins --skip-themes --quiet --size_format=b 2>>"$TMP_ERR" | grep -Eo '^[0-9]+' || true)"
 EST_DB_BYTES="${EST_DB_BYTES:-2147483648}"
 REQUIRED_BYTES=$(( (EST_DB_BYTES * 110) / 100 )) # +10% buffer
-AVAIL_BYTES=$(df -B1 . | awk 'NR==2{print $4}')
+AVAIL_BYTES=$(df -B1 . 2>/dev/null | awk 'NR==2{print $4}' || true)
 
 echo
 info "=== Disk Space Analysis ==="
 echo "Estimated dump size:          $(numfmt --to=iec $EST_DB_BYTES)"
 echo "Required (with 10% buffer):   $(numfmt --to=iec $REQUIRED_BYTES)"
-echo "Available on target FS:       $(numfmt --to=iec $AVAIL_BYTES)"
+[[ -n "$AVAIL_BYTES" ]] && echo "Available on target FS:       $(numfmt --to=iec $AVAIL_BYTES)" \
+                        || echo "Available on target FS:       unknown (df unavailable)"
 echo
 
-if (( AVAIL_BYTES < REQUIRED_BYTES )); then
-  err "Insufficient space for DB backup. Aborting."
-  mv -f "$TMP_ERR" backup_db.err.log 2>/dev/null || true
-  echo "Details (if any) saved to $(pwd)/backup_db.err.log"
-  exit 1
+if [[ -z "$AVAIL_BYTES" ]]; then
+  warn "df unavailable in this environment, skipping space check."
+else
+  if (( AVAIL_BYTES < REQUIRED_BYTES )); then
+    err "Insufficient space for DB backup. Aborting."
+    mv -f "$TMP_ERR" backup_db.err.log 2>/dev/null || true
+    echo "Details (if any) saved to $(pwd)/backup_db.err.log"
+    exit 1
+  fi
 fi
 # Enough space -> proceed immediately (no prompt)
 
